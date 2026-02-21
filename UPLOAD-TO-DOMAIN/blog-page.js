@@ -40,7 +40,7 @@ async function loadAllBlogPosts(filter = 'all') {
                             <span>•</span>
                             <span>${post.date}</span>
                             <span>•</span>
-                            <span>${post.readTime}</span>
+                            <span>${post.read_time || post.readTime || '5 min read'}</span>
                         </div>
                         <h2><a href="blog-post.html?id=${post.id}">${post.title}</a></h2>
                         <p>${post.excerpt}</p>
