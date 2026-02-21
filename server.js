@@ -1,43 +1,32 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { Pool } = require('pg');
+const { MongoClient } = require('mongodb');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// PostgreSQL connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL,
-    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
-});
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/enochlegal';
+let db;
+let postsCollection;
 
-// Initialize database table
-async function initDatabase() {
+// Connect to MongoDB
+async function connectDB() {
     try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS posts (
-                id BIGINT PRIMARY KEY,
-                date VARCHAR(255) NOT NULL,
-                title TEXT NOT NULL,
-                excerpt TEXT NOT NULL,
-                content TEXT NOT NULL,
-                author VARCHAR(255) DEFAULT 'Precious C. Enoch, Esq.',
-                read_time VARCHAR(50) DEFAULT '5 min read',
-                category VARCHAR(100) NOT NULL,
-                featured BOOLEAN DEFAULT FALSE,
-                icon VARCHAR(10) DEFAULT '📝',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        console.log('✅ Database table initialized');
+        const client = await MongoClient.connect(MONGODB_URI);
+        db = client.db();
+        postsCollection = db.collection('posts');
+        console.log('✅ Connected to MongoDB');
     } catch (error) {
-        console.error('❌ Database initialization error:', error);
+        console.error('❌ MongoDB connection error:', error);
+        process.exit(1);
     }
 }
 
-initDatabase();
+// Initialize database
+connectDB();
 
 // Middleware
 app.use(cors());
@@ -49,8 +38,8 @@ app.use(express.static(__dirname));
 // API Status/Info endpoint
 app.get('/api', async (req, res) => {
     try {
-        const result = await pool.query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE featured = true) as featured FROM posts');
-        const stats = result.rows[0];
+        const total = await postsCollection.countDocuments();
+        const featured = await postsCollection.countDocuments({ featured: true });
         
         res.json({
             api: 'Enoch & Enoch Legal Blog System',
@@ -61,7 +50,7 @@ app.get('/api', async (req, res) => {
             tech_stack: {
                 backend: 'Node.js ' + process.version,
                 framework: 'Express.js',
-                database: 'PostgreSQL (Railway)',
+                database: 'MongoDB',
                 hosting: 'Railway',
                 deployment: 'Continuous Deployment'
             },
@@ -77,13 +66,13 @@ app.get('/api', async (req, res) => {
                 'Real-time blog publishing',
                 'RESTful API architecture',
                 'CORS enabled',
-                'PostgreSQL persistence',
+                'MongoDB persistence',
                 'Admin authentication',
                 'Responsive frontend'
             ],
             metrics: {
-                totalPosts: parseInt(stats.total),
-                featuredPosts: parseInt(stats.featured),
+                totalPosts: total,
+                featuredPosts: featured,
                 serverUptime: Math.floor(process.uptime()) + ' seconds',
                 memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
                 database: 'Connected'
@@ -109,8 +98,8 @@ app.get('/api', async (req, res) => {
 // Get all posts
 app.get('/api/posts', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM posts ORDER BY id DESC');
-        res.json(result.rows);
+        const posts = await postsCollection.find().sort({ id: -1 }).toArray();
+        res.json(posts);
     } catch (error) {
         console.error('Error fetching posts:', error);
         res.status(500).json({ error: 'Failed to fetch posts' });
@@ -120,9 +109,9 @@ app.get('/api/posts', async (req, res) => {
 // Get single post
 app.get('/api/posts/:id', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM posts WHERE id = $1', [req.params.id]);
-        if (result.rows.length > 0) {
-            res.json(result.rows[0]);
+        const post = await postsCollection.findOne({ id: parseInt(req.params.id) });
+        if (post) {
+            res.json(post);
         } else {
             res.status(404).json({ error: 'Post not found' });
         }
@@ -136,34 +125,49 @@ app.get('/api/posts/:id', async (req, res) => {
 app.post('/api/posts', async (req, res) => {
     try {
         const { title, excerpt, content, category, readTime, icon, featured } = req.body;
+        
+        // Validate required fields
+        if (!title || !excerpt || !content || !category) {
+            return res.status(400).json({ error: 'Missing required fields: title, excerpt, content, category' });
+        }
+        
         const id = Date.now();
         const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const author = 'Precious C. Enoch, Esq.';
         
         // If featured, unfeatured others
         if (featured) {
-            await pool.query('UPDATE posts SET featured = FALSE');
+            await postsCollection.updateMany({}, { $set: { featured: false } });
         }
         
-        const result = await pool.query(
-            `INSERT INTO posts (id, date, title, excerpt, content, author, read_time, category, featured, icon) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
-             RETURNING *`,
-            [id, date, title, excerpt, content, author, readTime || '5 min read', category, featured || false, icon || '📝']
-        );
+        const newPost = {
+            id,
+            date,
+            title,
+            excerpt,
+            content,
+            author,
+            read_time: readTime || '5 min read',
+            category,
+            featured: featured || false,
+            icon: icon || '📝',
+            created_at: new Date()
+        };
         
-        res.json({ success: true, post: result.rows[0] });
+        await postsCollection.insertOne(newPost);
+        
+        res.json({ success: true, post: newPost });
     } catch (error) {
         console.error('Error creating post:', error);
-        res.status(500).json({ error: 'Failed to create post' });
+        res.status(500).json({ error: 'Failed to create post', details: error.message });
     }
 });
 
 // Delete post
 app.delete('/api/posts/:id', async (req, res) => {
     try {
-        const result = await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
-        if (result.rowCount > 0) {
+        const result = await postsCollection.deleteOne({ id: parseInt(req.params.id) });
+        if (result.deletedCount > 0) {
             res.json({ success: true });
         } else {
             res.status(404).json({ error: 'Post not found' });
@@ -193,5 +197,5 @@ app.get('/', (req, res) => {
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Database: PostgreSQL (Railway)`);
+    console.log(`📊 Database: MongoDB`);
 });
