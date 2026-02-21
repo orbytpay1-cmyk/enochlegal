@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Enoch & Enoch Legal</title>
+    <link rel="icon" type="image/jpeg" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+
+        /* Login Page */
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+
+        .login-box {
+            background: white;
+            padding: 50px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-box h1 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .login-box p {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #c9a961;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #c9a961;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #1a1a2e;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            display: none;
+        }
+
+        .dashboard.active {
+            display: block;
+        }
+
+        .dashboard-header {
+            background: #1a1a2e;
+            color: white;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dashboard-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .logout-btn {
+            background: #c9a961;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .dashboard-content {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            color: #c9a961;
+            border-bottom-color: #c9a961;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .card h2 {
+            color: #1a1a2e;
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: inherit;
+            min-height: 150px;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #c9a961;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .blog-list {
+            display: grid;
+            gap: 20px;
+        }
+
+        .blog-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #c9a961;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .blog-item-content h3 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .blog-item-meta {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .blog-item-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-edit {
+            background: #c9a961;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-small:hover {
+            opacity: 0.8;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .editor-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-btn {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .toolbar-btn:hover {
+            background: #e9ecef;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .blog-item {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <h1>Admin Login</h1>
+            <p>Enoch & Enoch Legal</p>
+            <div id="loginError" class="error"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard">
+        <div class="dashboard-header">
+            <h1>Welcome, Precious Enoch</h1>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="dashboard-content">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('new-post')">New Post</button>
+                <button class="tab" onclick="switchTab('manage-posts')">Manage Posts</button>
+            </div>
+
+            <!-- New Post Tab -->
+            <div id="new-post" class="tab-content active">
+                <div class="card">
+                    <h2>Create New Blog Post</h2>
+                    <div id="successMessage" class="success-message"></div>
+                    <form id="newPostForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Title *</label>
+                                <input type="text" id="postTitle" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Category *</label>
+                                <select id="postCategory" required>
+                                    <option value="corporate">Corporate Law</option>
+                                    <option value="compliance">Compliance</option>
+                                    <option value="insolvency">Insolvency</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Read Time</label>
+                                <input type="text" id="postReadTime" placeholder="e.g., 5 min read" value="5 min read">
+                            </div>
+                            <div class="form-group">
+                                <label>Icon</label>
+                                <input type="text" id="postIcon" placeholder="e.g., ⚖️ 📝 💼" value="📝">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Excerpt (Brief Summary) *</label>
+                            <textarea id="postExcerpt" rows="3" required placeholder="A brief 1-2 sentence summary of your article"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Content *</label>
+                            <p style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">
+                                Write your article in normal text. Press Enter twice for new paragraphs.
+                            </p>
+                            <textarea id="postContent" rows="15" required placeholder="Write your article here in normal text. Just type naturally - paragraphs will be formatted automatically."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="postFeatured">
+                                Set as Featured Post
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn">Publish Post</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Manage Posts Tab -->
+            <div id="manage-posts" class="tab-content">
+                <div class="card">
+                    <h2>Your Blog Posts</h2>
+                    <div id="blogList" class="blog-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js?v=3"></script>
+</body>
+</html>

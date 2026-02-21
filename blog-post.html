@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Post - Enoch & Enoch Legal</title>
+    <link rel="icon" type="image/jpeg" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <img src="WhatsApp Image 2026-02-20 at 16.23.00.jpeg" alt="Enoch & Enoch Legal" class="nav-logo">
+                <span class="brand-text">Enoch & Enoch Legal</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html#home">Home</a></li>
+                <li><a href="index.html#about">About</a></li>
+                <li><a href="index.html#practice">Practice Areas</a></li>
+                <li><a href="blog.html">Blog</a></li>
+                <li><a href="index.html#contact">Contact</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Content -->
+    <article class="blog-post">
+        <a href="blog.html" class="back-link">← Back to Blog</a>
+        
+        <div id="postContent">
+            <div style="text-align: center; padding: 100px 20px;">
+                <p>Loading article...</p>
+            </div>
+        </div>
+    </article>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Enoch & Enoch Legal</h3>
+                    <p>Corporate Law And Compliance</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="index.html#about">About</a></li>
+                        <li><a href="index.html#practice">Practice Areas</a></li>
+                        <li><a href="blog.html">Blog</a></li>
+                        <li><a href="index.html#contact">Contact</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Enoch & Enoch Legal. All rights reserved.</p>
+                <p style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;">This website is for informational purposes only and does not constitute legal advice.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="blog-data.js"></script>
+    <script>
+        // Get post ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get('id');
+
+        // Mobile Navigation
+        const hamburger = document.querySelector('.hamburger');
+        const navMenu = document.querySelector('.nav-menu');
+
+        if (hamburger) {
+            hamburger.addEventListener('click', function() {
+                navMenu.classList.toggle('active');
+            });
+        }
+
+        // Load and display post
+        async function loadPost() {
+            if (!postId) {
+                document.getElementById('postContent').innerHTML = `
+                    <div style="text-align: center; padding: 100px 20px;">
+                        <h2>Post not found</h2>
+                        <p>The blog post you're looking for doesn't exist.</p>
+                        <a href="blog.html" class="btn btn-primary" style="margin-top: 20px;">Back to Blog</a>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(window.location.origin + '/api/posts/' + postId);
+                
+                if (!response.ok) {
+                    throw new Error('Post not found');
+                }
+
+                const post = await response.json();
+                
+                // Update page title
+                document.title = post.title + ' - Enoch & Enoch Legal';
+                
+                // Display post
+                document.getElementById('postContent').innerHTML = `
+                    <div class="blog-post-header">
+                        <div class="blog-post-meta">
+                            <span>📅 ${post.date}</span>
+                            <span>✍️ ${post.author}</span>
+                            <span>⏱️ ${post.read_time || post.readTime}</span>
+                        </div>
+                        <h1>${post.title}</h1>
+                    </div>
+
+                    <div class="blog-post-content">
+                        ${post.content}
+                    </div>
+
+                    <div class="author-bio">
+                        <h3>About the Author</h3>
+                        <p><strong>Precious C. Enoch, Esq.</strong> is the Principal Partner at Enoch & Enoch Legal, a firm structured to deliver clear, practical, and commercially sound legal solutions. Her practice spans commercial law, insolvency, mediation, debt recovery, and regulatory compliance.</p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading post:', error);
+                document.getElementById('postContent').innerHTML = `
+                    <div style="text-align: center; padding: 100px 20px;">
+                        <h2>Error Loading Article</h2>
+                        <p>We couldn't load this article. Please try again later.</p>
+                        <a href="blog.html" class="btn btn-primary" style="margin-top: 20px;">Back to Blog</a>
+                    </div>
+                `;
+            }
+        }
+
+        // Load post when page loads
+        loadPost();
+    </script>
+</body>
+</html>
