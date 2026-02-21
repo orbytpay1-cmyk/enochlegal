@@ -208,3 +208,52 @@ async function displayBlogPosts() {
         blogGrid.innerHTML = '';
     }
 }
+
+
+// Load blog previews on homepage
+async function loadBlogPreviews() {
+    const blogPreviewGrid = document.getElementById('blogPreviewGrid');
+    
+    if (!blogPreviewGrid) return; // Not on homepage
+    
+    try {
+        // Load posts from API
+        await loadBlogPosts();
+        
+        // Get latest 3 posts or featured posts
+        let previewPosts = allBlogPosts.slice(0, 3);
+        
+        if (previewPosts.length === 0) {
+            blogPreviewGrid.innerHTML = '<p style="text-align: center; color: #666;">No articles available yet.</p>';
+            return;
+        }
+        
+        blogPreviewGrid.innerHTML = previewPosts.map(post => `
+            <div class="blog-preview-card" onclick="window.location.href='blog-post.html?id=${post.id}'">
+                ${post.coverImage ? 
+                    `<div class="blog-preview-image">
+                        <img src="${post.coverImage}" alt="${post.title}">
+                    </div>` : 
+                    `<div class="blog-preview-icon">${post.icon || '📝'}</div>`
+                }
+                <div class="blog-preview-body">
+                    <span class="blog-preview-category">${post.category}</span>
+                    <h3>${post.title}</h3>
+                    <p class="blog-preview-excerpt">${post.excerpt}</p>
+                    <div class="blog-preview-meta">
+                        <span>${post.date}</span>
+                        <a href="blog-post.html?id=${post.id}" class="blog-preview-read-more">Read More →</a>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading blog previews:', error);
+        blogPreviewGrid.innerHTML = '<p style="text-align: center; color: #666;">Unable to load articles.</p>';
+    }
+}
+
+// Load blog previews when page loads
+if (document.getElementById('blogPreviewGrid')) {
+    loadBlogPreviews();
+}
