@@ -2,8 +2,8 @@
 const ADMIN_USERNAME = 'prech114';
 const ADMIN_PASSWORD = 'pre11726644472837466@@@';
 
-// API base URL - just use the origin
-const API_URL = window.location.origin;
+// API base URL - always use Railway backend
+const API_URL = 'https://enochlegal-production.up.railway.app';
 
 // Check if user is logged in
 function checkAuth() {

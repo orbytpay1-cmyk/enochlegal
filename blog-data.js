@@ -1,8 +1,8 @@
 // Blog posts data - loads from backend API
 var allBlogPosts = [];
 
-// API base URL (will be your Railway URL in production)
-const API_URL = window.location.origin;
+// API base URL - always use Railway backend
+const API_URL = 'https://enochlegal-production.up.railway.app';
 
 // Load posts from backend
 async function loadBlogPosts() {
