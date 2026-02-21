@@ -11,17 +11,24 @@ const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/enochlegal';
 let db;
 let postsCollection;
+let isConnected = false;
 
 // Connect to MongoDB
 async function connectDB() {
     try {
-        const client = await MongoClient.connect(MONGODB_URI);
+        console.log('🔄 Connecting to MongoDB...');
+        const client = await MongoClient.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+        });
         db = client.db();
         postsCollection = db.collection('posts');
+        isConnected = true;
         console.log('✅ Connected to MongoDB');
     } catch (error) {
-        console.error('❌ MongoDB connection error:', error);
-        process.exit(1);
+        console.error('❌ MongoDB connection error:', error.message);
+        console.log('⚠️ Server will start but database operations will fail');
+        isConnected = false;
     }
 }
 
@@ -38,6 +45,16 @@ app.use(express.static(__dirname));
 // API Status/Info endpoint
 app.get('/api', async (req, res) => {
     try {
+        if (!isConnected || !postsCollection) {
+            return res.json({
+                api: 'Enoch & Enoch Legal Blog System',
+                status: '🟡 PARTIAL',
+                message: 'API operational but database not connected',
+                database: 'Disconnected',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
         const total = await postsCollection.countDocuments();
         const featured = await postsCollection.countDocuments({ featured: true });
         
@@ -98,6 +115,9 @@ app.get('/api', async (req, res) => {
 // Get all posts
 app.get('/api/posts', async (req, res) => {
     try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const posts = await postsCollection.find().sort({ id: -1 }).toArray();
         res.json(posts);
     } catch (error) {
@@ -124,6 +144,10 @@ app.get('/api/posts/:id', async (req, res) => {
 // Create new post
 app.post('/api/posts', async (req, res) => {
     try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected. Please check MongoDB connection.' });
+        }
+        
         const { title, excerpt, content, category, readTime, icon, featured } = req.body;
         
         // Validate required fields
