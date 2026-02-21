@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Post Generator - Enoch & Enoch Legal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border-left: 4px solid #c9a961;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+
+        .instructions h3 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+
+        .button {
+            background: #c9a961;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            text-decoration: none;
+        }
+
+        .button:hover {
+            background: #1a1a2e;
+            transform: translateY(-2px);
+        }
+
+        .button-secondary {
+            background: #1a1a2e;
+        }
+
+        .button-secondary:hover {
+            background: #c9a961;
+        }
+
+        .output {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .output.show {
+            display: block;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            color: #155724;
+        }
+
+        .blog-list {
+            margin-top: 30px;
+        }
+
+        .blog-item {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #c9a961;
+        }
+
+        .blog-item h3 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .blog-item p {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .blog-item .meta {
+            font-size: 0.9rem;
+            color: #999;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 Blog Post Generator</h1>
+        <p class="subtitle">Generate individual blog post HTML files from your blog data</p>
+
+        <div class="instructions">
+            <h3>How to Use:</h3>
+            <ol>
+                <li>Add your blog posts to <code>blog-data.js</code> file</li>
+                <li>Click "Generate Blog Posts" button below</li>
+                <li>Copy the generated HTML for each post</li>
+                <li>Save each as <code>blog-post-[ID].html</code> in your website folder</li>
+                <li>Your blog posts will now be accessible on the website!</li>
+            </ol>
+        </div>
+
+        <div class="button-group">
+            <button class="button" onclick="generatePosts()">Generate Blog Posts</button>
+            <a href="blog-data.js" class="button button-secondary" download>Download blog-data.js</a>
+        </div>
+
+        <div id="output" class="output"></div>
+
+        <div class="blog-list">
+            <h2>Current Blog Posts:</h2>
+            <div id="blogList"></div>
+        </div>
+    </div>
+
+    <script src="blog-data.js"></script>
+    <script>
+        // Display current blog posts
+        function displayBlogPosts() {
+            const blogList = document.getElementById('blogList');
+            blogList.innerHTML = allBlogPosts.map(post => `
+                <div class="blog-item">
+                    <h3>${post.title}</h3>
+                    <p>${post.excerpt}</p>
+                    <div class="meta">
+                        ${post.date} • ${post.author} • ${post.readTime} • Category: ${post.category}
+                        ${post.featured ? ' • <strong>FEATURED</strong>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Generate blog post HTML files
+        function generatePosts() {
+            const output = document.getElementById('output');
+            let html = '<div class="success">✅ Blog posts generated successfully! Copy the HTML below for each post:</div>';
+
+            allBlogPosts.forEach(post => {
+                const postHTML = generatePostHTML(post);
+                html += `
+                    <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 5px;">
+                        <h3>blog-post-${post.id}.html</h3>
+                        <p style="color: #666; margin: 10px 0;">Copy this code and save as <code>blog-post-${post.id}.html</code></p>
+                        <button class="button" onclick="copyToClipboard('post-${post.id}')">Copy HTML</button>
+                        <button class="button button-secondary" onclick="downloadPost(${post.id})">Download File</button>
+                        <textarea id="post-${post.id}" style="width: 100%; height: 200px; margin-top: 15px; padding: 10px; font-family: monospace; font-size: 0.85rem;">${escapeHtml(postHTML)}</textarea>
+                    </div>
+                `;
+            });
+
+            output.innerHTML = html;
+            output.classList.add('show');
+        }
+
+        function generatePostHTML(post) {
+            return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${post.title} - Enoch & Enoch Legal</title>
+    <link rel="icon" type="image/jpeg" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <img src="WhatsApp Image 2026-02-20 at 16.23.00.jpeg" alt="Enoch & Enoch Legal" class="nav-logo">
+                <span class="brand-text">Enoch & Enoch Legal</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html#home">Home</a></li>
+                <li><a href="index.html#about">About</a></li>
+                <li><a href="index.html#practice">Practice Areas</a></li>
+                <li><a href="index.html#clients">Clients</a></li>
+                <li><a href="blog.html">Blog</a></li>
+                <li><a href="index.html#contact">Contact</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Blog Post Content -->
+    <article class="blog-post">
+        <a href="blog.html" class="back-link">← Back to Blog</a>
+        
+        <div class="blog-post-header">
+            <div class="blog-post-meta">
+                <span>📅 ${post.date}</span>
+                <span>✍️ ${post.author}</span>
+                <span>⏱️ ${post.readTime}</span>
+            </div>
+            <h1>${post.title}</h1>
+        </div>
+
+        <div class="blog-post-content">
+            ${post.content}
+        </div>
+
+        <div class="author-bio">
+            <h3>About the Author</h3>
+            <p><strong>Barrister Precious C. Enoch</strong> is the Principal Partner at Enoch & Enoch Legal. Called to the Nigerian Bar in 2022, she is a corporate law specialist, compliance expert, and insolvency practitioner, leading the firm's strategic advisory and client engagements.</p>
+        </div>
+    </article>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Enoch & Enoch Legal</h3>
+                    <p>Excellence in Corporate & Compliance Law</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="index.html#about">About</a></li>
+                        <li><a href="index.html#practice">Practice Areas</a></li>
+                        <li><a href="blog.html">Blog</a></li>
+                        <li><a href="index.html#contact">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Enoch & Enoch Legal. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function copyToClipboard(id) {
+            const textarea = document.getElementById(id);
+            textarea.select();
+            document.execCommand('copy');
+            alert('HTML copied to clipboard! Save it as ' + id.replace('post-', 'blog-post-') + '.html');
+        }
+
+        function downloadPost(id) {
+            const post = allBlogPosts.find(p => p.id === id);
+            const html = generatePostHTML(post);
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `blog-post-${id}.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Display posts on load
+        displayBlogPosts();
+    </script>
+</body>
+</html>

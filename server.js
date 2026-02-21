@@ -141,7 +141,7 @@ app.post('/api/posts', async (req, res) => {
             });
         }
         
-        const { title, excerpt, content, category, readTime, icon, featured } = req.body;
+        const { title, excerpt, content, category, readTime, icon, featured, coverImage } = req.body;
         
         // Validate required fields
         if (!title || !excerpt || !content || !category) {
@@ -168,6 +168,7 @@ app.post('/api/posts', async (req, res) => {
             category,
             featured: featured || false,
             icon: icon || '📝',
+            coverImage: coverImage || null,
             created_at: new Date()
         };
         
