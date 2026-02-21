@@ -187,6 +187,7 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
             
             // Reset form
             document.getElementById('newPostForm').reset();
+            document.getElementById('uploadPlaceholder').style.display = 'block';
             document.getElementById('imagePreview').style.display = 'none';
             
             // Hide success message after 5 seconds
@@ -221,16 +222,82 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
 document.getElementById('postCoverImage').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('previewImg').src = e.target.result;
-            document.getElementById('imagePreview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-    } else {
-        document.getElementById('imagePreview').style.display = 'none';
+        displayImagePreview(file);
     }
 });
+
+// Drag and drop functionality
+const uploadArea = document.getElementById('imageUploadArea');
+const fileInput = document.getElementById('postCoverImage');
+const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+const imagePreview = document.getElementById('imagePreview');
+const removeImageBtn = document.getElementById('removeImageBtn');
+
+// Click to upload
+uploadArea.addEventListener('click', (e) => {
+    if (e.target.id !== 'removeImageBtn' && !e.target.closest('#removeImageBtn')) {
+        fileInput.click();
+    }
+});
+
+// Prevent default drag behaviors
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, preventDefaults, false);
+    document.body.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+// Highlight drop area when dragging over it
+['dragenter', 'dragover'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, () => {
+        uploadArea.classList.add('drag-over');
+    }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, () => {
+        uploadArea.classList.remove('drag-over');
+    }, false);
+});
+
+// Handle dropped files
+uploadArea.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    
+    if (files.length > 0) {
+        const file = files[0];
+        if (file.type.startsWith('image/')) {
+            fileInput.files = files;
+            displayImagePreview(file);
+        } else {
+            alert('Please upload an image file (JPG, PNG, or WebP)');
+        }
+    }
+});
+
+// Remove image
+removeImageBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileInput.value = '';
+    uploadPlaceholder.style.display = 'block';
+    imagePreview.style.display = 'none';
+});
+
+// Display image preview
+function displayImagePreview(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('previewImg').src = e.target.result;
+        uploadPlaceholder.style.display = 'none';
+        imagePreview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
 
 // Load and display blog posts in manage section with collapsible categories
 async function loadBlogPosts() {
