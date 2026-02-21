@@ -434,8 +434,12 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Cover Image URL (Optional)</label>
-                                <input type="url" id="postCoverImage" placeholder="https://example.com/image.jpg">
+                                <label>Cover Image (Optional)</label>
+                                <input type="file" id="postCoverImage" accept="image/*">
+                                <small style="color: #666; display: block; margin-top: 5px;">Max 5MB. JPG, PNG, or WebP</small>
+                                <div id="imagePreview" style="margin-top: 10px; display: none;">
+                                    <img id="previewImg" style="max-width: 200px; border-radius: 8px;">
+                                </div>
                             </div>
                         </div>
 

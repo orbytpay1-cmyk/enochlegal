@@ -119,6 +119,35 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
     const contentText = document.getElementById('postContent').value;
     const contentHtml = textToHtml(contentText);
     
+    let coverImageUrl = null;
+    
+    // Upload cover image if selected
+    const imageFile = document.getElementById('postCoverImage').files[0];
+    if (imageFile) {
+        console.log('📸 Uploading cover image...');
+        try {
+            const formData = new FormData();
+            formData.append('image', imageFile);
+            
+            const uploadResponse = await fetch(`${API_URL}/api/upload-image`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (uploadResponse.ok) {
+                const uploadResult = await uploadResponse.json();
+                coverImageUrl = uploadResult.url;
+                console.log('✅ Image uploaded:', coverImageUrl);
+            } else {
+                console.error('❌ Image upload failed');
+                alert('Failed to upload cover image. Continuing without image...');
+            }
+        } catch (error) {
+            console.error('❌ Image upload error:', error);
+            alert('Error uploading image. Continuing without image...');
+        }
+    }
+    
     const newPost = {
         title: document.getElementById('postTitle').value,
         excerpt: document.getElementById('postExcerpt').value,
@@ -127,7 +156,7 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
         category: document.getElementById('postCategory').value,
         featured: document.getElementById('postFeatured').checked,
         icon: document.getElementById('postIcon').value,
-        coverImage: document.getElementById('postCoverImage').value || null
+        coverImage: coverImageUrl
     };
     
     console.log('📝 Post data:', newPost);
@@ -158,6 +187,7 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
             
             // Reset form
             document.getElementById('newPostForm').reset();
+            document.getElementById('imagePreview').style.display = 'none';
             
             // Hide success message after 5 seconds
             setTimeout(() => {
@@ -184,6 +214,21 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
     } catch (error) {
         console.error('❌ Network/Connection error:', error);
         alert(`❌ Error connecting to server: ${error.message}\n\nPossible causes:\n- Server is not running\n- Network connection issue\n- CORS problem\n\nCheck the console (F12) for more details.`);
+    }
+});
+
+// Image preview
+document.getElementById('postCoverImage').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('previewImg').src = e.target.result;
+            document.getElementById('imagePreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        document.getElementById('imagePreview').style.display = 'none';
     }
 });
 

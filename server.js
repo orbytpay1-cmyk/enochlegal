@@ -3,9 +3,32 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { MongoClient } = require('mongodb');
 const path = require('path');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configure Cloudinary (free image hosting)
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'demo',
+    api_key: process.env.CLOUDINARY_API_KEY || 'demo',
+    api_secret: process.env.CLOUDINARY_API_SECRET || 'demo'
+});
+
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed!'), false);
+        }
+    }
+});
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/enochlegal';
@@ -15,7 +38,7 @@ let isConnected = false;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
 // Health check endpoint (always works)
@@ -128,6 +151,34 @@ app.get('/api/posts/:id', async (req, res) => {
     } catch (error) {
         console.error('Error fetching post:', error);
         res.status(500).json({ error: 'Failed to fetch post', details: error.message });
+    }
+});
+
+// Upload image endpoint
+app.post('/api/upload-image', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        // Convert buffer to base64
+        const b64 = Buffer.from(req.file.buffer).toString('base64');
+        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+
+        // Upload to Cloudinary
+        const result = await cloudinary.uploader.upload(dataURI, {
+            folder: 'enochlegal-blog',
+            resource_type: 'auto'
+        });
+
+        res.json({ 
+            success: true, 
+            url: result.secure_url,
+            public_id: result.public_id
+        });
+    } catch (error) {
+        console.error('Error uploading image:', error);
+        res.status(500).json({ error: 'Failed to upload image', details: error.message });
     }
 });
 
