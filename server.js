@@ -13,34 +13,19 @@ let db;
 let postsCollection;
 let isConnected = false;
 
-// Connect to MongoDB
-async function connectDB() {
-    try {
-        console.log('🔄 Connecting to MongoDB...');
-        const client = await MongoClient.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000,
-        });
-        db = client.db();
-        postsCollection = db.collection('posts');
-        isConnected = true;
-        console.log('✅ Connected to MongoDB');
-    } catch (error) {
-        console.error('❌ MongoDB connection error:', error.message);
-        console.log('⚠️ Server will start but database operations will fail');
-        isConnected = false;
-    }
-}
-
-// Initialize database
-connectDB();
-
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(__dirname));
 
-// API Routes
+// Health check endpoint (always works)
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        database: isConnected ? 'connected' : 'disconnected'
+    });
+});
 
 // API Status/Info endpoint
 app.get('/api', async (req, res) => {
@@ -51,6 +36,7 @@ app.get('/api', async (req, res) => {
                 status: '🟡 PARTIAL',
                 message: 'API operational but database not connected',
                 database: 'Disconnected',
+                mongodb_uri_set: !!process.env.MONGODB_URI,
                 timestamp: new Date().toISOString()
             });
         }
@@ -103,6 +89,7 @@ app.get('/api', async (req, res) => {
             message: '⚡ API is operational and ready to serve requests'
         });
     } catch (error) {
+        console.error('API error:', error);
         res.json({
             api: 'Enoch & Enoch Legal Blog System',
             status: '🟢 LIVE',
@@ -122,13 +109,16 @@ app.get('/api/posts', async (req, res) => {
         res.json(posts);
     } catch (error) {
         console.error('Error fetching posts:', error);
-        res.status(500).json({ error: 'Failed to fetch posts' });
+        res.status(500).json({ error: 'Failed to fetch posts', details: error.message });
     }
 });
 
 // Get single post
 app.get('/api/posts/:id', async (req, res) => {
     try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const post = await postsCollection.findOne({ id: parseInt(req.params.id) });
         if (post) {
             res.json(post);
@@ -137,7 +127,7 @@ app.get('/api/posts/:id', async (req, res) => {
         }
     } catch (error) {
         console.error('Error fetching post:', error);
-        res.status(500).json({ error: 'Failed to fetch post' });
+        res.status(500).json({ error: 'Failed to fetch post', details: error.message });
     }
 });
 
@@ -145,7 +135,10 @@ app.get('/api/posts/:id', async (req, res) => {
 app.post('/api/posts', async (req, res) => {
     try {
         if (!isConnected || !postsCollection) {
-            return res.status(503).json({ error: 'Database not connected. Please check MongoDB connection.' });
+            return res.status(503).json({ 
+                error: 'Database not connected. Please check MongoDB connection.',
+                mongodb_uri_set: !!process.env.MONGODB_URI
+            });
         }
         
         const { title, excerpt, content, category, readTime, icon, featured } = req.body;
@@ -190,6 +183,9 @@ app.post('/api/posts', async (req, res) => {
 // Delete post
 app.delete('/api/posts/:id', async (req, res) => {
     try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const result = await postsCollection.deleteOne({ id: parseInt(req.params.id) });
         if (result.deletedCount > 0) {
             res.json({ success: true });
@@ -198,7 +194,7 @@ app.delete('/api/posts/:id', async (req, res) => {
         }
     } catch (error) {
         console.error('Error deleting post:', error);
-        res.status(500).json({ error: 'Failed to delete post' });
+        res.status(500).json({ error: 'Failed to delete post', details: error.message });
     }
 });
 
@@ -218,8 +214,46 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
+// Start server FIRST, then connect to MongoDB
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Database: MongoDB`);
+    console.log(`🔗 MONGODB_URI set: ${!!process.env.MONGODB_URI}`);
+    
+    // Connect to MongoDB after server starts
+    connectDB();
 });
+
+// Connect to MongoDB (non-blocking)
+async function connectDB() {
+    try {
+        console.log('🔄 Connecting to MongoDB...');
+        console.log('📍 URI:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
+        
+        const client = await MongoClient.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
+        });
+        
+        db = client.db();
+        postsCollection = db.collection('posts');
+        isConnected = true;
+        console.log('✅ Connected to MongoDB successfully!');
+        
+        // Test the connection
+        const count = await postsCollection.countDocuments();
+        console.log(`📊 Found ${count} posts in database`);
+        
+    } catch (error) {
+        console.error('❌ MongoDB connection error:', error.message);
+        console.log('⚠️ Server will continue but database operations will fail');
+        console.log('💡 Check: 1) MongoDB URI is correct, 2) Network access allows 0.0.0.0/0, 3) User has correct permissions');
+        isConnected = false;
+        
+        // Retry connection after 30 seconds
+        setTimeout(() => {
+            console.log('🔄 Retrying MongoDB connection...');
+            connectDB();
+        }, 30000);
+    }
+}
