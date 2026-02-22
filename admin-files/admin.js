@@ -55,6 +55,8 @@ function switchTab(tabName) {
     
     if (tabName === 'manage-posts') {
         loadBlogPosts();
+    } else if (tabName === 'messages') {
+        loadMessages();
     }
 }
 
@@ -405,3 +407,120 @@ async function deletePostById(id) {
 
 // Initialize
 checkAuth();
+
+// Load messages
+async function loadMessages() {
+    const messagesList = document.getElementById('messagesList');
+    
+    try {
+        const response = await fetch(`${API_URL}/api/messages`);
+        if (!response.ok) {
+            messagesList.innerHTML = '<p style="text-align: center; color: #666;">Error loading messages.</p>';
+            return;
+        }
+        
+        const messages = await response.json();
+        
+        if (messages.length === 0) {
+            messagesList.innerHTML = `
+                <div class="no-messages">
+                    <div class="no-messages-icon">📭</div>
+                    <h3>No messages yet</h3>
+                    <p>Contact form submissions will appear here</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Update unread badge
+        const unreadCount = messages.filter(m => !m.read).length;
+        const badge = document.getElementById('unreadBadge');
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+        
+        // Display messages
+        messagesList.innerHTML = messages.map(msg => `
+            <div class="message-item ${msg.read ? '' : 'unread'}">
+                <div class="message-header">
+                    <div class="message-info">
+                        <h3>${msg.name}</h3>
+                        <div class="message-meta">
+                            <span>📧 ${msg.email}</span>
+                            <span>📅 ${new Date(msg.date).toLocaleString()}</span>
+                            ${!msg.read ? '<span style="color: #ff9800; font-weight: 600;">● NEW</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="message-subject">
+                    Subject: ${msg.subject}
+                </div>
+                <div class="message-body">
+                    ${msg.message}
+                </div>
+                <div class="message-actions">
+                    <a href="mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}" class="btn-small btn-reply">
+                        Reply via Email
+                    </a>
+                    <a href="https://wa.me/${msg.email.includes('+') ? msg.email.replace(/[^0-9]/g, '') : ''}" target="_blank" class="btn-small" style="background: #25D366; color: white;">
+                        WhatsApp
+                    </a>
+                    ${!msg.read ? `<button class="btn-small btn-mark-read" onclick="markAsRead(${msg.id})">Mark as Read</button>` : ''}
+                    <button class="btn-small btn-delete" onclick="deleteMessage(${msg.id})">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading messages:', error);
+        messagesList.innerHTML = '<p style="text-align: center; color: #666;">Error loading messages.</p>';
+    }
+}
+
+// Mark message as read
+async function markAsRead(id) {
+    try {
+        const response = await fetch(`${API_URL}/api/messages/${id}/read`, {
+            method: 'PATCH'
+        });
+        
+        if (response.ok) {
+            loadMessages();
+        } else {
+            alert('Error marking message as read.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error connecting to server.');
+    }
+}
+
+// Delete message
+async function deleteMessage(id) {
+    if (confirm('Are you sure you want to delete this message?')) {
+        try {
+            const response = await fetch(`${API_URL}/api/messages/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                loadMessages();
+            } else {
+                alert('Error deleting message.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error connecting to server.');
+        }
+    }
+}
+
+// Auto-refresh messages every 30 seconds when on messages tab
+setInterval(() => {
+    const messagesTab = document.getElementById('messages');
+    if (messagesTab && messagesTab.classList.contains('active')) {
+        loadMessages();
+    }
+}, 30000);

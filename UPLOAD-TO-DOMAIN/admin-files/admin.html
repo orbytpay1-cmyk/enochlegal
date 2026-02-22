@@ -399,6 +399,103 @@
             background: #c82333;
         }
 
+        /* Messages Styles */
+        .messages-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .message-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #c9a961;
+            transition: all 0.3s ease;
+        }
+
+        .message-item.unread {
+            background: #fff9f0;
+            border-left-color: #ff9800;
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.1);
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .message-info h3 {
+            color: #1a1a2e;
+            margin: 0 0 5px 0;
+            font-size: 1.1rem;
+        }
+
+        .message-meta {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .message-meta span {
+            margin-right: 15px;
+        }
+
+        .message-subject {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .message-body {
+            color: #333;
+            line-height: 1.6;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .unread-badge {
+            background: #ff9800;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .btn-reply {
+            background: #c9a961;
+            color: white;
+        }
+
+        .btn-mark-read {
+            background: #28a745;
+            color: white;
+        }
+
+        .no-messages {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .no-messages-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
         @media (max-width: 768px) {
             .form-row {
                 grid-template-columns: 1fr;
@@ -417,6 +514,18 @@
             .blog-item {
                 flex-direction: column;
                 gap: 15px;
+            }
+
+            .message-header {
+                flex-direction: column;
+            }
+
+            .message-actions {
+                width: 100%;
+            }
+
+            .btn-small {
+                flex: 1;
             }
         }
     </style>
@@ -453,6 +562,7 @@
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('new-post')">New Post</button>
                 <button class="tab" onclick="switchTab('manage-posts')">View Articles</button>
+                <button class="tab" onclick="switchTab('messages')">Messages <span id="unreadBadge" class="unread-badge" style="display: none;"></span></button>
             </div>
 
             <!-- New Post Tab -->
@@ -535,6 +645,18 @@
                 <div class="card">
                     <h2>Your Blog Posts</h2>
                     <div id="blogList" class="blog-list"></div>
+                </div>
+            </div>
+
+            <!-- Messages Tab -->
+            <div id="messages" class="tab-content">
+                <div class="card">
+                    <h2>Contact Form Messages</h2>
+                    <div id="messagesList" class="messages-list">
+                        <div style="text-align: center; padding: 40px; color: #666;">
+                            <p>Loading messages...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

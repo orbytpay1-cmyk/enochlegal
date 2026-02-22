@@ -44,6 +44,7 @@ const upload = multer({
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/enochlegal';
 let db;
 let postsCollection;
+let messagesCollection;
 let isConnected = false;
 
 // Middleware
@@ -271,7 +272,7 @@ app.post('/api/login', (req, res) => {
     }
 });
 
-// Contact form submission
+// Contact form submission - Save to database
 app.post('/api/contact', async (req, res) => {
     try {
         const { name, email, subject, message } = req.body;
@@ -281,74 +282,126 @@ app.post('/api/contact', async (req, res) => {
             return res.status(400).json({ error: 'Name, email, and message are required' });
         }
         
-        // Check if email is configured
-        const emailConfigured = process.env.EMAIL_USER && 
-                               process.env.EMAIL_PASS && 
-                               process.env.EMAIL_USER !== 'your-email@gmail.com';
-        
-        if (!emailConfigured) {
-            console.log('📧 Email not configured - logging message instead');
-            console.log('Contact Form Submission:', { name, email, subject, message });
-            
-            // Return success even without email configured (for testing)
-            return res.json({ 
-                success: true, 
-                message: 'Message received! We\'ll get back to you soon.',
-                note: 'Email service not configured - message logged to console'
-            });
-        }
-        
-        // Email options
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: 'preciousenoch2026@gmail.com',
-            replyTo: email,
-            subject: `Contact Form: ${subject || 'New Message'}`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #1a1a2e; border-bottom: 3px solid #c9a961; padding-bottom: 10px;">
-                        New Contact Form Submission
-                    </h2>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <p style="margin: 10px 0;"><strong>Name:</strong> ${name}</p>
-                        <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
-                        <p style="margin: 10px 0;"><strong>Subject:</strong> ${subject || 'No subject'}</p>
-                    </div>
-                    <div style="background: white; padding: 20px; border-left: 4px solid #c9a961; margin: 20px 0;">
-                        <h3 style="color: #1a1a2e; margin-top: 0;">Message:</h3>
-                        <p style="line-height: 1.6; color: #333;">${message}</p>
-                    </div>
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
-                        <p>This message was sent from the Enoch & Enoch Legal website contact form.</p>
-                        <p>Reply directly to: <a href="mailto:${email}" style="color: #c9a961;">${email}</a></p>
-                    </div>
-                </div>
-            `
+        // Save message to database
+        const newMessage = {
+            id: Date.now(),
+            name,
+            email,
+            subject: subject || 'No subject',
+            message,
+            date: new Date().toISOString(),
+            read: false,
+            created_at: new Date()
         };
         
-        // Send email with timeout
-        const sendPromise = transporter.sendMail(mailOptions);
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Email timeout')), 10000)
-        );
+        if (isConnected && messagesCollection) {
+            await messagesCollection.insertOne(newMessage);
+            console.log('✅ Message saved to database:', newMessage.id);
+        } else {
+            console.log('⚠️ Database not connected - message not saved');
+        }
         
-        await Promise.race([sendPromise, timeoutPromise]);
+        // Try to send email (optional, won't fail if email not configured)
+        try {
+            const emailConfigured = process.env.EMAIL_USER && 
+                                   process.env.EMAIL_PASS && 
+                                   process.env.EMAIL_USER !== 'your-email@gmail.com';
+            
+            if (emailConfigured) {
+                const mailOptions = {
+                    from: process.env.EMAIL_USER,
+                    to: 'preciousenoch2026@gmail.com',
+                    replyTo: email,
+                    subject: `Contact Form: ${subject || 'New Message'}`,
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #1a1a2e; border-bottom: 3px solid #c9a961; padding-bottom: 10px;">
+                                New Contact Form Submission
+                            </h2>
+                            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                <p style="margin: 10px 0;"><strong>Name:</strong> ${name}</p>
+                                <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+                                <p style="margin: 10px 0;"><strong>Subject:</strong> ${subject || 'No subject'}</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-left: 4px solid #c9a961; margin: 20px 0;">
+                                <h3 style="color: #1a1a2e; margin-top: 0;">Message:</h3>
+                                <p style="line-height: 1.6; color: #333;">${message}</p>
+                            </div>
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
+                                <p>This message was sent from the Enoch & Enoch Legal website contact form.</p>
+                                <p>Reply directly to: <a href="mailto:${email}" style="color: #c9a961;">${email}</a></p>
+                            </div>
+                        </div>
+                    `
+                };
+                
+                const sendPromise = transporter.sendMail(mailOptions);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Email timeout')), 10000)
+                );
+                
+                await Promise.race([sendPromise, timeoutPromise]);
+                console.log('✅ Email sent successfully');
+            }
+        } catch (emailError) {
+            console.log('⚠️ Email failed but message saved to database:', emailError.message);
+        }
         
-        res.json({ success: true, message: 'Message sent successfully!' });
+        res.json({ success: true, message: 'Message received! We\'ll get back to you soon.' });
     } catch (error) {
-        console.error('Error sending email:', error);
-        
-        // Log the message even if email fails
-        console.log('📧 Failed to send email - logging message:', {
-            name: req.body.name,
-            email: req.body.email,
-            subject: req.body.subject,
-            message: req.body.message
-        });
-        
+        console.error('Error processing contact form:', error);
         res.status(500).json({ 
-            error: 'Unable to send email at this time. Please contact us directly at preciousenoch2026@gmail.com or via WhatsApp.' 
+            error: 'Unable to process your message. Please try again or contact us directly.' 
         });
+    }
+});
+
+// Get all messages (admin only)
+app.get('/api/messages', async (req, res) => {
+    try {
+        if (!isConnected || !messagesCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const messages = await messagesCollection.find().sort({ id: -1 }).toArray();
+        res.json(messages);
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        res.status(500).json({ error: 'Failed to fetch messages', details: error.message });
+    }
+});
+
+// Mark message as read
+app.patch('/api/messages/:id/read', async (req, res) => {
+    try {
+        if (!isConnected || !messagesCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        await messagesCollection.updateOne(
+            { id: parseInt(req.params.id) },
+            { $set: { read: true } }
+        );
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error marking message as read:', error);
+        res.status(500).json({ error: 'Failed to update message', details: error.message });
+    }
+});
+
+// Delete message
+app.delete('/api/messages/:id', async (req, res) => {
+    try {
+        if (!isConnected || !messagesCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const result = await messagesCollection.deleteOne({ id: parseInt(req.params.id) });
+        if (result.deletedCount > 0) {
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Message not found' });
+        }
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        res.status(500).json({ error: 'Failed to delete message', details: error.message });
     }
 });
 
@@ -380,6 +433,7 @@ async function connectDB() {
         
         db = client.db();
         postsCollection = db.collection('posts');
+        messagesCollection = db.collection('messages');
         isConnected = true;
         console.log('✅ Connected to MongoDB successfully!');
         
