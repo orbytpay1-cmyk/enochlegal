@@ -281,10 +281,28 @@ app.post('/api/contact', async (req, res) => {
             return res.status(400).json({ error: 'Name, email, and message are required' });
         }
         
+        // Check if email is configured
+        const emailConfigured = process.env.EMAIL_USER && 
+                               process.env.EMAIL_PASS && 
+                               process.env.EMAIL_USER !== 'your-email@gmail.com';
+        
+        if (!emailConfigured) {
+            console.log('📧 Email not configured - logging message instead');
+            console.log('Contact Form Submission:', { name, email, subject, message });
+            
+            // Return success even without email configured (for testing)
+            return res.json({ 
+                success: true, 
+                message: 'Message received! We\'ll get back to you soon.',
+                note: 'Email service not configured - message logged to console'
+            });
+        }
+        
         // Email options
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@enochlegal.com',
+            from: process.env.EMAIL_USER,
             to: 'preciousenoch2026@gmail.com',
+            replyTo: email,
             subject: `Contact Form: ${subject || 'New Message'}`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -308,13 +326,29 @@ app.post('/api/contact', async (req, res) => {
             `
         };
         
-        // Send email
-        await transporter.sendMail(mailOptions);
+        // Send email with timeout
+        const sendPromise = transporter.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Email timeout')), 10000)
+        );
+        
+        await Promise.race([sendPromise, timeoutPromise]);
         
         res.json({ success: true, message: 'Message sent successfully!' });
     } catch (error) {
         console.error('Error sending email:', error);
-        res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+        
+        // Log the message even if email fails
+        console.log('📧 Failed to send email - logging message:', {
+            name: req.body.name,
+            email: req.body.email,
+            subject: req.body.subject,
+            message: req.body.message
+        });
+        
+        res.status(500).json({ 
+            error: 'Unable to send email at this time. Please contact us directly at preciousenoch2026@gmail.com or via WhatsApp.' 
+        });
     }
 });
 

@@ -274,14 +274,20 @@ if (contactForm) {
         };
         
         try {
+            // Add timeout to fetch request
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+            
             const response = await fetch('https://enochlegal-production.up.railway.app/api/contact', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(formData),
+                signal: controller.signal
             });
             
+            clearTimeout(timeoutId);
             const result = await response.json();
             
             if (response.ok) {
@@ -289,13 +295,20 @@ if (contactForm) {
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#d4edda';
                 statusDiv.style.color = '#155724';
+                statusDiv.style.border = '1px solid #c3e6cb';
                 statusDiv.textContent = '✅ Message sent successfully! We\'ll get back to you soon.';
                 contactForm.reset();
+                
+                // Hide success message after 5 seconds
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
             } else {
                 // Error
                 statusDiv.style.display = 'block';
                 statusDiv.style.background = '#f8d7da';
                 statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
                 statusDiv.textContent = '❌ ' + (result.error || 'Failed to send message. Please try again.');
             }
         } catch (error) {
@@ -303,7 +316,13 @@ if (contactForm) {
             statusDiv.style.display = 'block';
             statusDiv.style.background = '#f8d7da';
             statusDiv.style.color = '#721c24';
-            statusDiv.textContent = '❌ Network error. Please check your connection and try again.';
+            statusDiv.style.border = '1px solid #f5c6cb';
+            
+            if (error.name === 'AbortError') {
+                statusDiv.textContent = '❌ Request timeout. Please try again or contact us directly via WhatsApp: +234 813 153 9182';
+            } else {
+                statusDiv.textContent = '❌ Network error. Please contact us via WhatsApp: +234 813 153 9182 or email: preciousenoch2026@gmail.com';
+            }
         } finally {
             // Re-enable button
             submitBtn.disabled = false;
