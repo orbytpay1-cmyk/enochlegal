@@ -61,15 +61,7 @@ anchorLinks.forEach(function(anchor) {
     });
 });
 
-// Contact Form
-const contactForm = document.querySelector('.contact-form');
-if (contactForm) {
-    contactForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        alert('Thank you for your message! We will get back to you soon.');
-        contactForm.reset();
-    });
-}
+// Contact Form - handled below with actual email sending
 
 // Practice Carousel
 let practiceIndex = 0;
