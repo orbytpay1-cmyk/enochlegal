@@ -254,11 +254,12 @@
                         <p>We provide remote legal services nationwide</p>
                     </div>
                 </div>
-                <form class="contact-form">
-                    <input type="text" placeholder="Your Name" required>
-                    <input type="email" placeholder="Your Email" required>
-                    <input type="text" placeholder="Subject">
-                    <textarea placeholder="Your Message" rows="5" required></textarea>
+                <form class="contact-form" id="contactForm">
+                    <input type="text" id="contactName" placeholder="Your Name" required>
+                    <input type="email" id="contactEmail" placeholder="Your Email" required>
+                    <input type="text" id="contactSubject" placeholder="Subject">
+                    <textarea id="contactMessage" placeholder="Your Message" rows="5" required></textarea>
+                    <div id="contactStatus" style="margin-bottom: 15px; padding: 10px; border-radius: 5px; display: none;"></div>
                     <button type="submit" class="btn btn-primary">Send Message</button>
                 </form>
             </div>

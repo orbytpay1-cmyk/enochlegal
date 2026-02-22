@@ -5,9 +5,19 @@ const { MongoClient } = require('mongodb');
 const path = require('path');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configure email transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER || 'your-email@gmail.com',
+        pass: process.env.EMAIL_PASS || 'your-app-password'
+    }
+});
 
 // Configure Cloudinary (free image hosting)
 cloudinary.config({
@@ -258,6 +268,53 @@ app.post('/api/login', (req, res) => {
         res.json({ success: true, token: 'admin-token-' + Date.now() });
     } else {
         res.status(401).json({ error: 'Invalid credentials' });
+    }
+});
+
+// Contact form submission
+app.post('/api/contact', async (req, res) => {
+    try {
+        const { name, email, subject, message } = req.body;
+        
+        // Validate required fields
+        if (!name || !email || !message) {
+            return res.status(400).json({ error: 'Name, email, and message are required' });
+        }
+        
+        // Email options
+        const mailOptions = {
+            from: process.env.EMAIL_USER || 'noreply@enochlegal.com',
+            to: 'preciousenoch2026@gmail.com',
+            subject: `Contact Form: ${subject || 'New Message'}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #1a1a2e; border-bottom: 3px solid #c9a961; padding-bottom: 10px;">
+                        New Contact Form Submission
+                    </h2>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 10px 0;"><strong>Name:</strong> ${name}</p>
+                        <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+                        <p style="margin: 10px 0;"><strong>Subject:</strong> ${subject || 'No subject'}</p>
+                    </div>
+                    <div style="background: white; padding: 20px; border-left: 4px solid #c9a961; margin: 20px 0;">
+                        <h3 style="color: #1a1a2e; margin-top: 0;">Message:</h3>
+                        <p style="line-height: 1.6; color: #333;">${message}</p>
+                    </div>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
+                        <p>This message was sent from the Enoch & Enoch Legal website contact form.</p>
+                        <p>Reply directly to: <a href="mailto:${email}" style="color: #c9a961;">${email}</a></p>
+                    </div>
+                </div>
+            `
+        };
+        
+        // Send email
+        await transporter.sendMail(mailOptions);
+        
+        res.json({ success: true, message: 'Message sent successfully!' });
+    } catch (error) {
+        console.error('Error sending email:', error);
+        res.status(500).json({ error: 'Failed to send message. Please try again later.' });
     }
 });
 
