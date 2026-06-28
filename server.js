@@ -8,6 +8,7 @@ const cloudinary = require('cloudinary').v2;
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const crypto = require('crypto');
+const { registerSeoRoutes } = require('./seo-routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,7 +89,6 @@ let isConnected = false;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
-app.use(express.static(__dirname));
 
 // Health check endpoint (always works)
 app.get('/health', (req, res) => {
@@ -596,13 +596,17 @@ app.get('/sitemap.xml', async (req, res) => {
     ];
     try {
         if (isConnected && postsCollection) {
-            const posts = await postsCollection.find({}, { projection: { id: 1, title: 1, coverImage: 1, created_at: 1 } }).sort({ id: -1 }).toArray();
+            const posts = await postsCollection.find({}, { projection: { id: 1, title: 1, excerpt: 1, coverImage: 1, created_at: 1 } }).sort({ id: -1 }).toArray();
             posts.forEach(p => urls.push({
                 loc: `${base}/blog-post.html?id=${p.id}`,
                 priority: '0.6',
                 freq: 'monthly',
                 lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : undefined,
-                images: p.coverImage ? [{ loc: p.coverImage, title: p.title || '', caption: p.title || '' }] : []
+                images: p.coverImage ? [{
+                    loc: p.coverImage,
+                    title: p.title || '',
+                    caption: (p.excerpt || p.title || '').slice(0, 300)
+                }] : []
             }));
         }
     } catch (e) {
@@ -627,11 +631,21 @@ app.get('/sitemap.xml', async (req, res) => {
     res.type('application/xml').send(body);
 });
 
+// SEO-aware blog pages + RSS feed (must register before express.static)
+registerSeoRoutes(app, {
+    rootDir: __dirname,
+    siteBase,
+    isConnected: () => isConnected,
+    postsCollection: () => postsCollection
+});
+
+// Static assets — after SEO routes so blog pages get server-rendered meta for Google
+app.use(express.static(__dirname));
+
 // Clean multi-page URLs (each nav item is its own page)
 app.get('/about',    (req, res) => res.sendFile(path.join(__dirname, 'about.html')));
 app.get('/practice', (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
 app.get('/contact',  (req, res) => res.sendFile(path.join(__dirname, 'contact.html')));
-app.get('/insights', (req, res) => res.sendFile(path.join(__dirname, 'blog.html')));
 
 // Hidden admin entry — reached via the 10-tap gesture. Password is still required.
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin-files', 'admin.html')));

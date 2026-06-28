@@ -1,6 +1,25 @@
 # Deploy Enoch & Enoch Legal
 
-## Recommended stack
+## Your existing blog posts, images & Google indexing
+
+**All old posts stay live** when you deploy — they are stored in **MongoDB Atlas**, not on Railway.
+Use the **same `MONGODB_URI`** and every article, excerpt, and cover image URL comes back automatically.
+Cloudinary image URLs stored on each post keep working as long as you keep the same Cloudinary account.
+
+**Google indexing is built in:**
+
+| What Google sees | How |
+|---|---|
+| Every blog post URL | `/sitemap.xml` lists all posts from MongoDB |
+| Post cover images in Google Images | Image sitemap entries with **title + excerpt caption** per post |
+| Article snippets | Server-rendered **title + excerpt** in HTML before JavaScript runs |
+| Rich results | `BlogPosting` + `ImageObject` JSON-LD on each article |
+| Blog index | `ItemList` schema + RSS feed at `/feed.xml` |
+| Precious Enoch photo | `Person` + `ImageObject` on About, image sitemap on Home/About |
+
+After deploy, submit `https://YOUR-DOMAIN/sitemap.xml` in [Google Search Console](https://search.google.com/search-console).
+
+---
 
 | Platform | Role | Works for this site? |
 |---|---|---|

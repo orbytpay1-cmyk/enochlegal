@@ -16,6 +16,7 @@
     <meta property="og:description" content="Legal insight from Enoch & Enoch Legal.">
     <meta property="og:url" content="">
     <meta property="og:image" content="precious-enoch-2.jpg">
+    <meta property="og:image:alt" content="Enoch &amp; Enoch Legal">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Enoch & Enoch Legal">
     <meta name="twitter:description" content="Legal insight from Enoch & Enoch Legal.">
@@ -126,9 +127,11 @@
             setMeta('meta[property="og:description"]', desc);
             setMeta('meta[property="og:url"]', url);
             setMeta('meta[property="og:image"]', img);
+            setMeta('meta[property="og:image:alt"]', post.title);
             setMeta('meta[name="twitter:title"]', post.title);
             setMeta('meta[name="twitter:description"]', desc);
             setMeta('meta[name="twitter:image"]', img);
+            setMeta('meta[name="twitter:image:alt"]', post.title);
             const can = document.head.querySelector('link[rel="canonical"]'); if (can) can.href = url;
 
             const ld = document.createElement('script');
@@ -138,7 +141,13 @@
                 "@type": "BlogPosting",
                 "headline": post.title,
                 "description": desc,
-                "image": img,
+                "image": {
+                    "@type": "ImageObject",
+                    "url": img,
+                    "name": post.title,
+                    "caption": post.excerpt || post.title,
+                    "representativeOfPage": true
+                },
                 "datePublished": post.created_at || post.date,
                 "dateModified": post.created_at || post.date,
                 "url": url,
@@ -152,6 +161,8 @@
 
         // Load and display post
         async function loadPost() {
+            if (document.getElementById('postContent')?.dataset?.serverRendered === '1') return;
+
             if (!postId) {
                 document.getElementById('postContent').innerHTML = `
                     <div style="text-align: center; padding: 100px 20px;">
