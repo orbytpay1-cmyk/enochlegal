@@ -190,22 +190,146 @@ function renderRecent(rows) {
 }
 
 // ============================================================
-//  BLOG POSTS
+//  BLOG POSTS — create, edit, schedule, draft, publish
 // ============================================================
-function insertTag(tag) {
-    const textarea = document.getElementById('postContent');
-    const start = textarea.selectionStart, end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end);
-    let insertion = '';
-    switch (tag) {
-        case 'h2': insertion = `<h2>${selectedText || 'Heading'}</h2>\n`; break;
-        case 'h3': insertion = `<h3>${selectedText || 'Subheading'}</h3>\n`; break;
-        case 'p': insertion = `<p>${selectedText || 'Your paragraph text here'}</p>\n`; break;
-        case 'ul': insertion = `<ul>\n    <li>${selectedText || 'List item 1'}</li>\n    <li>List item 2</li>\n</ul>\n`; break;
-        case 'blockquote': insertion = `<blockquote>\n    "${selectedText || 'Your quote here'}"\n</blockquote>\n`; break;
+let existingCoverUrl = null;
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toDateInputValue(d) {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return '';
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+function toDatetimeLocalValue(d) {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return '';
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+}
+function htmlToPlainText(html) {
+    return String(html || '')
+        .replace(/<\/p>\s*/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/h[1-6]>\s*/gi, '\n\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+function getPublishMode() {
+    const el = document.querySelector('input[name="publishMode"]:checked');
+    return el ? el.value : 'now';
+}
+function updatePublishUI() {
+    const mode = getPublishMode();
+    const row = document.getElementById('scheduleRow');
+    const sched = document.getElementById('postScheduleAt');
+    if (row) row.classList.toggle('show', mode === 'schedule');
+    if (sched) sched.required = mode === 'schedule';
+    const btn = document.getElementById('postSubmitBtn');
+    if (btn) {
+        const editing = !!document.getElementById('editPostId').value;
+        if (mode === 'draft') btn.textContent = editing ? 'Save Draft' : 'Save Draft';
+        else if (mode === 'schedule') btn.textContent = editing ? 'Update Schedule' : 'Schedule Post';
+        else btn.textContent = editing ? 'Update & Publish' : 'Publish Post';
     }
-    textarea.value = textarea.value.substring(0, start) + insertion + textarea.value.substring(end);
-    textarea.focus();
+}
+document.querySelectorAll('input[name="publishMode"]').forEach(r => {
+    r.addEventListener('change', updatePublishUI);
+});
+function resetPostForm() {
+    document.getElementById('editPostId').value = '';
+    document.getElementById('postFormTitle').textContent = 'Create New Blog Post';
+    document.getElementById('newPostForm').reset();
+    document.getElementById('postDisplayDate').value = toDateInputValue(new Date());
+    document.querySelector('input[name="publishMode"][value="now"]').checked = true;
+    document.getElementById('postReadTime').value = '5 min read';
+    document.getElementById('postIcon').value = '📝';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+    existingCoverUrl = null;
+    document.getElementById('uploadPlaceholder').style.display = 'block';
+    document.getElementById('imagePreview').style.display = 'none';
+    fileInput.value = '';
+    updatePublishUI();
+}
+function cancelEditPost() {
+    resetPostForm();
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.tab')[2].classList.add('active');
+    document.getElementById('manage-posts').classList.add('active');
+    loadBlogPosts();
+}
+function postStatusBadge(post) {
+    const st = post.status || 'published';
+    if (st === 'draft') return '<span class="status-badge status-draft">Draft</span>';
+    if (st === 'scheduled') {
+        const when = post.publishAt ? new Date(post.publishAt).toLocaleString() : 'Pending';
+        return `<span class="status-badge status-scheduled">Scheduled · ${esc(when)}</span>`;
+    }
+    return '<span class="status-badge status-published">Published</span>';
+}
+function showExistingCover(url) {
+    if (!url) return;
+    existingCoverUrl = url;
+    document.getElementById('previewImg').src = url;
+    uploadPlaceholder.style.display = 'none';
+    imagePreview.style.display = 'block';
+}
+async function editPost(id) {
+    try {
+        const r = await fetch(`${API_URL}/api/admin/posts/${id}`, { headers: authHeaders() });
+        if (r.status === 401) return handleUnauthorized();
+        if (!r.ok) return alert('Could not load post for editing.');
+        const post = await r.json();
+        document.getElementById('editPostId').value = post.id;
+        document.getElementById('postFormTitle').textContent = 'Edit Blog Post';
+        document.getElementById('postTitle').value = post.title;
+        document.getElementById('postCategory').value = post.category;
+        document.getElementById('postDisplayDate').value = toDateInputValue(post.displayDate || post.created_at || new Date());
+        document.getElementById('postReadTime').value = post.read_time || post.readTime || '5 min read';
+        document.getElementById('postIcon').value = post.icon || '📝';
+        document.getElementById('postExcerpt').value = post.excerpt;
+        document.getElementById('postContent').value = htmlToPlainText(post.content);
+        document.getElementById('postFeatured').checked = !!post.featured;
+        document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        existingCoverUrl = post.coverImage || null;
+        if (post.coverImage) showExistingCover(post.coverImage);
+        else {
+            uploadPlaceholder.style.display = 'block';
+            imagePreview.style.display = 'none';
+        }
+        const st = post.status || 'published';
+        if (st === 'draft') document.querySelector('input[name="publishMode"][value="draft"]').checked = true;
+        else if (st === 'scheduled') {
+            document.querySelector('input[name="publishMode"][value="schedule"]').checked = true;
+            document.getElementById('postScheduleAt').value = toDatetimeLocalValue(post.publishAt);
+        } else document.querySelector('input[name="publishMode"][value="now"]').checked = true;
+        updatePublishUI();
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.getElementById('new-post').classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+        alert('Error loading post.');
+    }
+}
+async function quickPublish(id) {
+    if (!confirm('Publish this post now?')) return;
+    try {
+        const r = await fetch(`${API_URL}/api/posts/${id}/status`, {
+            method: 'PATCH',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ action: 'publish' })
+        });
+        if (r.status === 401) return handleUnauthorized();
+        if (r.ok) loadBlogPosts();
+        else alert('Could not publish post.');
+    } catch (e) { alert('Error connecting to server.'); }
+}
+function previewPost(id) {
+    window.open(`/blog-post.html?id=${id}`, '_blank');
 }
 
 function textToHtml(text) {
@@ -223,7 +347,9 @@ function textToHtml(text) {
 document.getElementById('newPostForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const contentHtml = textToHtml(document.getElementById('postContent').value);
-    let coverImageUrl = null;
+    const publishMode = getPublishMode();
+    const editId = document.getElementById('editPostId').value;
+    let coverImageUrl = existingCoverUrl;
 
     const imageFile = document.getElementById('postCoverImage').files[0];
     if (imageFile) {
@@ -237,14 +363,14 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
             if (uploadResponse.ok) {
                 coverImageUrl = (await uploadResponse.json()).url;
             } else {
-                alert('Failed to upload cover image. Continuing without image...');
+                alert('Failed to upload cover image. Continuing without image change...');
             }
         } catch (error) {
-            alert('Error uploading image. Continuing without image...');
+            alert('Error uploading image. Continuing without image change...');
         }
     }
 
-    const newPost = {
+    const payload = {
         title: document.getElementById('postTitle').value,
         excerpt: document.getElementById('postExcerpt').value,
         content: contentHtml,
@@ -252,29 +378,38 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
         category: document.getElementById('postCategory').value,
         featured: document.getElementById('postFeatured').checked,
         icon: document.getElementById('postIcon').value,
-        coverImage: coverImageUrl
+        coverImage: coverImageUrl,
+        displayDate: document.getElementById('postDisplayDate').value,
+        publishMode,
+        scheduleAt: document.getElementById('postScheduleAt').value || null
     };
 
     try {
-        const response = await fetch(`${API_URL}/api/posts`, {
-            method: 'POST',
+        const url = editId ? `${API_URL}/api/posts/${editId}` : `${API_URL}/api/posts`;
+        const method = editId ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+            method,
             headers: authHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify(newPost)
+            body: JSON.stringify(payload)
         });
         if (response.status === 401) return handleUnauthorized();
         if (response.ok) {
+            const data = await response.json().catch(() => ({}));
             const successMsg = document.getElementById('successMessage');
-            successMsg.textContent = '✅ Blog post published successfully!';
+            const st = (data.post && data.post.status) || publishMode;
+            let msg = '✅ Blog post saved successfully!';
+            if (st === 'draft') msg = '✅ Draft saved — hidden from the public site.';
+            else if (st === 'scheduled') msg = '✅ Post scheduled — it will auto-publish at the chosen time.';
+            else msg = editId ? '✅ Post updated and live on the site.' : '✅ Blog post published successfully!';
+            successMsg.textContent = msg;
             successMsg.classList.add('show');
-            document.getElementById('newPostForm').reset();
-            document.getElementById('uploadPlaceholder').style.display = 'block';
-            document.getElementById('imagePreview').style.display = 'none';
-            setTimeout(() => successMsg.classList.remove('show'), 5000);
+            resetPostForm();
+            setTimeout(() => successMsg.classList.remove('show'), 6000);
             loadBlogPosts();
         } else {
             let msg = 'Unknown error';
-            try { const ed = await response.json(); msg = ed.error || ed.message || JSON.stringify(ed); } catch (e) {}
-            alert('❌ Error publishing post: ' + msg);
+            try { const ed = await response.json(); msg = ed.error || ed.message || JSON.stringify(ed); } catch (err) {}
+            alert('❌ Error saving post: ' + msg);
         }
     } catch (error) {
         alert('❌ Error connecting to server: ' + error.message);
@@ -310,6 +445,7 @@ uploadArea.addEventListener('drop', (e) => {
 });
 removeImageBtn.addEventListener('click', (e) => {
     e.stopPropagation(); fileInput.value = '';
+    existingCoverUrl = null;
     uploadPlaceholder.style.display = 'block'; imagePreview.style.display = 'none';
 });
 function displayImagePreview(file) {
@@ -324,8 +460,15 @@ function displayImagePreview(file) {
 async function loadBlogPosts() {
     const blogList = document.getElementById('blogList');
     try {
-        const response = await fetch(`${API_URL}/api/posts`);
-        if (!response.ok) { blogList.innerHTML = '<p class="muted-note">Error loading posts.</p>'; return; }
+        const response = await fetch(`${API_URL}/api/admin/posts`, { headers: authHeaders() });
+        if (response.status === 401) return handleUnauthorized();
+        if (!response.ok) {
+            if (response.status === 503) {
+                blogList.innerHTML = '<div class="muted-note" style="padding:30px;"><h3 style="color:var(--ink); margin-bottom:10px;">Database not connected</h3><p>Blog posts cannot load until MongoDB is linked on Railway.</p><p style="margin-top:10px; font-size:.9rem;">Set <strong>MONGODB_URI</strong> on the enochlegal service to your live MongoDB (Railway Mongo or Atlas), then redeploy.</p></div>';
+                return;
+            }
+            blogList.innerHTML = '<p class="muted-note">Error loading posts.</p>'; return;
+        }
         const posts = await response.json();
         if (!posts.length) { blogList.innerHTML = '<p class="muted-note">No blog posts yet. Create your first post!</p>'; return; }
 
@@ -347,16 +490,19 @@ async function loadBlogPosts() {
                             <h3>${cat.name}</h3>
                             <span class="category-count">${cat.posts.length} article${cat.posts.length !== 1 ? 's' : ''}</span>
                         </div>
-                        <div id="category-${catKey}" class="category-posts">
+                        <div id="category-${catKey}" class="category-posts active">
                             ${cat.posts.map(post => `
                                 <div class="blog-item" style="margin-bottom:15px;">
                                     <div class="blog-item-content">
                                         ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" style="width:100%; max-width:200px; border-radius:8px; margin-bottom:10px;">` : ''}
-                                        <h3>${esc(post.title)}</h3>
+                                        <h3>${esc(post.title)} ${postStatusBadge(post)}</h3>
                                         <div class="blog-item-meta">${esc(post.date)} • ${esc(post.read_time || post.readTime || '')} ${post.featured ? '• <strong style="color:#ad8838;">FEATURED</strong>' : ''}</div>
                                         <p style="color:#6b7488; margin-top:10px;">${esc(post.excerpt)}</p>
                                     </div>
                                     <div class="blog-item-actions">
+                                        <button class="btn-small btn-preview" onclick="previewPost(${post.id})">Preview</button>
+                                        <button class="btn-small btn-edit" onclick="editPost(${post.id})">Edit</button>
+                                        ${(post.status === 'draft' || post.status === 'scheduled') ? `<button class="btn-small btn-publish" onclick="quickPublish(${post.id})">Publish Now</button>` : ''}
                                         <button class="btn-small btn-delete" onclick="deletePostById(${post.id})">Delete</button>
                                     </div>
                                 </div>
@@ -450,4 +596,6 @@ setInterval(() => {
 }, 30000);
 
 // Init
+document.getElementById('postDisplayDate').value = toDateInputValue(new Date());
+updatePublishUI();
 checkAuth();

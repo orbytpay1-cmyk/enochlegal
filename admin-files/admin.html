@@ -131,7 +131,24 @@
         .btn-small { padding: 8px 16px; font-size: .85rem; border: none; border-radius: 9px; cursor: pointer; font-weight: 600; font-family: inherit; transition: all .2s; }
         .btn-edit { background: var(--gold); color: #2a2008; }
         .btn-delete { background: var(--bad); color: #fff; }
+        .btn-preview { background: var(--navy-2); color: #fff; }
+        .btn-publish { background: var(--good); color: #fff; }
+        .btn-secondary { background: #eef1f6; color: var(--ink); }
         .btn-small:hover { opacity: .88; transform: translateY(-1px); }
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; }
+        .status-published { background: rgba(31,157,107,.15); color: #157347; }
+        .status-scheduled { background: rgba(201,169,97,.2); color: #8a6b1f; }
+        .status-draft { background: rgba(107,116,136,.15); color: var(--muted); }
+        .publish-options { display: grid; gap: 10px; margin-bottom: 8px; }
+        .publish-option { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; cursor: pointer; transition: border-color .2s, background .2s; }
+        .publish-option:has(input:checked) { border-color: var(--gold); background: #fffdf7; }
+        .publish-option input { margin-top: 3px; accent-color: var(--gold-deep); }
+        .publish-option strong { display: block; color: var(--ink); font-size: .92rem; }
+        .publish-option span { color: var(--muted); font-size: .82rem; }
+        .schedule-row { display: none; margin-top: 12px; padding: 14px; background: #fafbfc; border-radius: 11px; border: 1px dashed var(--line); }
+        .schedule-row.show { display: block; }
+        .form-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        .blog-item-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
         .success-message { background: #e7f6ee; color: #157347; padding: 14px; border-radius: 10px; margin-bottom: 18px; display: none; }
         .success-message.show { display: block; }
         .image-upload-area { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center; cursor: pointer; transition: all .2s; background: #fafbfc; }
@@ -264,12 +281,13 @@
                 </div>
             </div>
 
-            <!-- New Post Tab -->
+            <!-- New / Edit Post Tab -->
             <div id="new-post" class="tab-content">
                 <div class="card">
-                    <h2>Create New Blog Post</h2>
+                    <h2 id="postFormTitle">Create New Blog Post</h2>
                     <div id="successMessage" class="success-message"></div>
                     <form id="newPostForm">
+                        <input type="hidden" id="editPostId" value="">
                         <div class="form-group">
                             <label>Title *</label>
                             <input type="text" id="postTitle" required>
@@ -285,20 +303,30 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Cover Image (Optional)</label>
-                                <div class="image-upload-area" id="imageUploadArea">
-                                    <input type="file" id="postCoverImage" accept="image/*" style="display:none;">
-                                    <div class="upload-placeholder" id="uploadPlaceholder">
-                                        <div style="font-size:2.6rem; margin-bottom:8px;">📸</div>
-                                        <p style="margin:0; font-weight:600;">Drag &amp; Drop Image Here</p>
-                                        <p style="margin:5px 0; color:#999; font-size:.9rem;">or click to browse</p>
-                                        <small style="color:#888;">Max 5MB • JPG, PNG, WebP</small>
-                                    </div>
-                                    <div id="imagePreview" style="display:none; position:relative;">
-                                        <img id="previewImg" style="max-width:100%; border-radius:8px;">
-                                        <button type="button" class="remove-image-btn" id="removeImageBtn">✕ Remove</button>
-                                    </div>
-                                </div>
+                                <label>Display Date *</label>
+                                <input type="date" id="postDisplayDate" required>
+                                <small style="color:var(--muted); display:block; margin-top:6px;">Date shown on the article (you can backdate or set any date).</small>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Publishing</label>
+                            <div class="publish-options">
+                                <label class="publish-option">
+                                    <input type="radio" name="publishMode" value="now" checked>
+                                    <div><strong>Publish now</strong><span>Article goes live immediately on the site.</span></div>
+                                </label>
+                                <label class="publish-option">
+                                    <input type="radio" name="publishMode" value="schedule">
+                                    <div><strong>Schedule for later</strong><span>Auto-publishes at the date &amp; time you choose — no action needed.</span></div>
+                                </label>
+                                <label class="publish-option">
+                                    <input type="radio" name="publishMode" value="draft">
+                                    <div><strong>Save as draft</strong><span>Hidden from the public site until you publish it.</span></div>
+                                </label>
+                            </div>
+                            <div id="scheduleRow" class="schedule-row">
+                                <label for="postScheduleAt">Auto-publish on *</label>
+                                <input type="datetime-local" id="postScheduleAt" style="margin-top:8px;">
                             </div>
                         </div>
                         <div class="form-row">
@@ -309,6 +337,22 @@
                             <div class="form-group">
                                 <label>Icon</label>
                                 <input type="text" id="postIcon" placeholder="e.g., ⚖️ 📝 💼" value="📝">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Cover Image (Optional)</label>
+                            <div class="image-upload-area" id="imageUploadArea">
+                                <input type="file" id="postCoverImage" accept="image/*" style="display:none;">
+                                <div class="upload-placeholder" id="uploadPlaceholder">
+                                    <div style="font-size:2.6rem; margin-bottom:8px;">📸</div>
+                                    <p style="margin:0; font-weight:600;">Drag &amp; Drop Image Here</p>
+                                    <p style="margin:5px 0; color:#999; font-size:.9rem;">or click to browse</p>
+                                    <small style="color:#888;">Max 5MB • JPG, PNG, WebP</small>
+                                </div>
+                                <div id="imagePreview" style="display:none; position:relative;">
+                                    <img id="previewImg" style="max-width:100%; border-radius:8px;">
+                                    <button type="button" class="remove-image-btn" id="removeImageBtn">✕ Remove</button>
+                                </div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -323,7 +367,10 @@
                         <div class="form-group">
                             <label><input type="checkbox" id="postFeatured"> Set as Featured Post</label>
                         </div>
-                        <button type="submit" class="btn" style="max-width:240px;">Publish Post</button>
+                        <div class="form-actions">
+                            <button type="submit" class="btn" id="postSubmitBtn" style="max-width:240px;">Publish Post</button>
+                            <button type="button" class="btn btn-secondary" id="cancelEditBtn" style="max-width:160px; display:none;" onclick="cancelEditPost()">Cancel Edit</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -348,6 +395,6 @@
         </div>
     </div>
 
-    <script src="/admin-files/admin.js?v=5"></script>
+    <script src="/admin-files/admin.js?v=7"></script>
 </body>
 </html>

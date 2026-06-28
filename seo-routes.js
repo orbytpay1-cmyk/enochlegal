@@ -2,6 +2,7 @@
 // and BlogPosting schema in the initial HTML (not only after JavaScript runs).
 const fs = require('fs');
 const path = require('path');
+const { postIsPublic, publicPostsFilter } = require('./post-helpers');
 
 function escHtml(s) {
     return String(s || '')
@@ -144,9 +145,10 @@ function registerSeoRoutes(app, ctx) {
 
     async function getPosts() {
         if (!ctx.isConnected() || !ctx.postsCollection()) return [];
-        return ctx.postsCollection().find({}, {
-            projection: { id: 1, title: 1, excerpt: 1, content: 1, category: 1, author: 1, date: 1, read_time: 1, readTime: 1, coverImage: 1, created_at: 1 }
+        const rows = await ctx.postsCollection().find(publicPostsFilter(), {
+            projection: { id: 1, title: 1, excerpt: 1, content: 1, category: 1, author: 1, date: 1, read_time: 1, readTime: 1, coverImage: 1, created_at: 1, publishAt: 1, status: 1 }
         }).sort({ id: -1 }).toArray();
+        return rows.filter(p => postIsPublic(p));
     }
 
     async function sendBlogPost(req, res, id) {

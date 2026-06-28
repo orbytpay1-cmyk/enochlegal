@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const crypto = require('crypto');
 const { registerSeoRoutes } = require('./seo-routes');
+const { publicPostsFilter, buildPostFields, postIsPublic } = require('./post-helpers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,6 +81,7 @@ const upload = multer({
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/enochlegal';
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'enochlegal';
 let db;
 let postsCollection;
 let messagesCollection;
@@ -171,8 +173,40 @@ app.get('/api', async (req, res) => {
     }
 });
 
-// Get all posts
+// Get all published posts (public — hides drafts & future-scheduled)
 app.get('/api/posts', async (req, res) => {
+    try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const posts = await postsCollection.find(publicPostsFilter()).sort({ id: -1 }).toArray();
+        res.json(posts.filter(p => postIsPublic(p)));
+    } catch (error) {
+        console.error('Error fetching posts:', error);
+        res.status(500).json({ error: 'Failed to fetch posts', details: error.message });
+    }
+});
+
+// Get single published post
+app.get('/api/posts/:id', async (req, res) => {
+    try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const post = await postsCollection.findOne({ id: parseInt(req.params.id) });
+        if (post && postIsPublic(post)) {
+            res.json(post);
+        } else {
+            res.status(404).json({ error: 'Post not found' });
+        }
+    } catch (error) {
+        console.error('Error fetching post:', error);
+        res.status(500).json({ error: 'Failed to fetch post', details: error.message });
+    }
+});
+
+// Admin: all posts including drafts & scheduled
+app.get('/api/admin/posts', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !postsCollection) {
             return res.status(503).json({ error: 'Database not connected' });
@@ -180,25 +214,21 @@ app.get('/api/posts', async (req, res) => {
         const posts = await postsCollection.find().sort({ id: -1 }).toArray();
         res.json(posts);
     } catch (error) {
-        console.error('Error fetching posts:', error);
+        console.error('Error fetching admin posts:', error);
         res.status(500).json({ error: 'Failed to fetch posts', details: error.message });
     }
 });
 
-// Get single post
-app.get('/api/posts/:id', async (req, res) => {
+// Admin: single post (any status)
+app.get('/api/admin/posts/:id', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !postsCollection) {
             return res.status(503).json({ error: 'Database not connected' });
         }
         const post = await postsCollection.findOne({ id: parseInt(req.params.id) });
-        if (post) {
-            res.json(post);
-        } else {
-            res.status(404).json({ error: 'Post not found' });
-        }
+        if (post) res.json(post);
+        else res.status(404).json({ error: 'Post not found' });
     } catch (error) {
-        console.error('Error fetching post:', error);
         res.status(500).json({ error: 'Failed to fetch post', details: error.message });
     }
 });
@@ -231,7 +261,7 @@ app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, r
     }
 });
 
-// Create new post
+// Create new post (publish now, schedule, or draft)
 app.post('/api/posts', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !postsCollection) {
@@ -241,34 +271,26 @@ app.post('/api/posts', requireAuth, async (req, res) => {
             });
         }
         
-        const { title, excerpt, content, category, readTime, icon, featured, coverImage } = req.body;
-        
-        // Validate required fields
+        const { title, excerpt, content, category } = req.body;
         if (!title || !excerpt || !content || !category) {
             return res.status(400).json({ error: 'Missing required fields: title, excerpt, content, category' });
         }
-        
+
+        let fields;
+        try {
+            fields = buildPostFields(req.body, null);
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
+        }
+
         const id = Date.now();
-        const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        const author = 'Precious C. Enoch, Esq.';
-        
-        // If featured, unfeatured others
-        if (featured) {
+        if (fields.featured && fields.status === 'published' && postIsPublic({ ...fields, status: fields.status, publishAt: fields.publishAt })) {
             await postsCollection.updateMany({}, { $set: { featured: false } });
         }
         
         const newPost = {
             id,
-            date,
-            title,
-            excerpt,
-            content,
-            author,
-            read_time: readTime || '5 min read',
-            category,
-            featured: featured || false,
-            icon: icon || '📝',
-            coverImage: coverImage || null,
+            ...fields,
             created_at: new Date()
         };
         
@@ -278,6 +300,70 @@ app.post('/api/posts', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Error creating post:', error);
         res.status(500).json({ error: 'Failed to create post', details: error.message });
+    }
+});
+
+// Update existing post
+app.put('/api/posts/:id', requireAuth, async (req, res) => {
+    try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const id = parseInt(req.params.id);
+        const existing = await postsCollection.findOne({ id });
+        if (!existing) return res.status(404).json({ error: 'Post not found' });
+
+        const { title, excerpt, content, category } = req.body;
+        if (!title || !excerpt || !content || !category) {
+            return res.status(400).json({ error: 'Missing required fields: title, excerpt, content, category' });
+        }
+
+        let fields;
+        try {
+            fields = buildPostFields(req.body, existing);
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
+        }
+
+        if (fields.featured && postIsPublic({ ...fields, status: fields.status, publishAt: fields.publishAt })) {
+            await postsCollection.updateMany({ id: { $ne: id } }, { $set: { featured: false } });
+        }
+
+        await postsCollection.updateOne({ id }, { $set: fields });
+        const updated = await postsCollection.findOne({ id });
+        res.json({ success: true, post: updated });
+    } catch (error) {
+        console.error('Error updating post:', error);
+        res.status(500).json({ error: 'Failed to update post', details: error.message });
+    }
+});
+
+// Quick publish / unpublish
+app.patch('/api/posts/:id/status', requireAuth, async (req, res) => {
+    try {
+        if (!isConnected || !postsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const id = parseInt(req.params.id);
+        const { action } = req.body; // publish | draft | unschedule
+        const existing = await postsCollection.findOne({ id });
+        if (!existing) return res.status(404).json({ error: 'Post not found' });
+
+        const now = new Date();
+        let update = { updated_at: now };
+        if (action === 'publish') {
+            update.status = 'published';
+            update.publishAt = now;
+        } else if (action === 'draft') {
+            update.status = 'draft';
+            update.publishAt = null;
+        } else {
+            return res.status(400).json({ error: 'Unknown action' });
+        }
+        await postsCollection.updateOne({ id }, { $set: update });
+        res.json({ success: true, post: await postsCollection.findOne({ id }) });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update status', details: error.message });
     }
 });
 
@@ -596,8 +682,8 @@ app.get('/sitemap.xml', async (req, res) => {
     ];
     try {
         if (isConnected && postsCollection) {
-            const posts = await postsCollection.find({}, { projection: { id: 1, title: 1, excerpt: 1, coverImage: 1, created_at: 1 } }).sort({ id: -1 }).toArray();
-            posts.forEach(p => urls.push({
+            const posts = await postsCollection.find(publicPostsFilter(), { projection: { id: 1, title: 1, excerpt: 1, coverImage: 1, created_at: 1, publishAt: 1, status: 1 } }).sort({ id: -1 }).toArray();
+            posts.filter(p => postIsPublic(p)).forEach(p => urls.push({
                 loc: `${base}/blog-post.html?id=${p.id}`,
                 priority: '0.6',
                 freq: 'monthly',
@@ -676,7 +762,7 @@ async function connectDB() {
             socketTimeoutMS: 45000,
         });
         
-        db = client.db();
+        db = client.db(MONGODB_DB_NAME);
         postsCollection = db.collection('posts');
         messagesCollection = db.collection('messages');
         visitsCollection = db.collection('visits');
@@ -693,6 +779,9 @@ async function connectDB() {
         // Test the connection
         const count = await postsCollection.countDocuments();
         console.log(`📊 Found ${count} posts in database`);
+
+        // Auto-publish scheduled posts every minute
+        startPublishScheduler();
 
         // Auto-seed: if the collection is brand new / empty, load the bundled posts.json
         // so a freshly-provisioned database (e.g. on a new Railway account) is never blank.
@@ -728,4 +817,30 @@ async function connectDB() {
             connectDB();
         }, 30000);
     }
+}
+
+// Promote scheduled posts when their publishAt time arrives
+let publishSchedulerStarted = false;
+function startPublishScheduler() {
+    if (publishSchedulerStarted) return;
+    publishSchedulerStarted = true;
+
+    async function run() {
+        if (!isConnected || !postsCollection) return;
+        try {
+            const now = new Date();
+            const result = await postsCollection.updateMany(
+                { status: 'scheduled', publishAt: { $lte: now } },
+                { $set: { status: 'published', updated_at: now } }
+            );
+            if (result.modifiedCount > 0) {
+                console.log(`📅 Auto-published ${result.modifiedCount} scheduled post(s)`);
+            }
+        } catch (e) {
+            console.log('⚠️ Schedule publish check failed:', e.message);
+        }
+    }
+
+    run();
+    setInterval(run, 60 * 1000);
 }
