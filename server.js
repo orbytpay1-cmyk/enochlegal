@@ -8,8 +8,11 @@ const cloudinary = require('cloudinary').v2;
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const crypto = require('crypto');
+const { uploadsDir, cloudinaryConfigured, saveUploadLocally } = require('./upload-images');
 const { registerSeoRoutes } = require('./seo-routes');
 const { publicPostsFilter, buildPostFields, postIsPublic } = require('./post-helpers');
+
+const UPLOADS_DIR = uploadsDir(__dirname);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -233,31 +236,41 @@ app.get('/api/admin/posts/:id', requireAuth, async (req, res) => {
     }
 });
 
-// Upload image endpoint
+// Upload image — Cloudinary when configured, otherwise saves to /uploads on the server
 app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
         }
 
-        // Convert buffer to base64
-        const b64 = Buffer.from(req.file.buffer).toString('base64');
-        const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+        if (cloudinaryConfigured()) {
+            const b64 = Buffer.from(req.file.buffer).toString('base64');
+            const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+            const result = await cloudinary.uploader.upload(dataURI, {
+                folder: 'enochlegal-blog',
+                resource_type: 'auto'
+            });
+            return res.json({
+                success: true,
+                url: result.secure_url,
+                public_id: result.public_id,
+                storage: 'cloudinary'
+            });
+        }
 
-        // Upload to Cloudinary
-        const result = await cloudinary.uploader.upload(dataURI, {
-            folder: 'enochlegal-blog',
-            resource_type: 'auto'
-        });
-
-        res.json({ 
-            success: true, 
-            url: result.secure_url,
-            public_id: result.public_id
-        });
+        // Fallback: store on server (works immediately; add Cloudinary env vars for permanent CDN hosting)
+        const url = saveUploadLocally(req.file, __dirname, siteBase(req));
+        console.log('📸 Image saved locally:', url);
+        res.json({ success: true, url, storage: 'local' });
     } catch (error) {
         console.error('Error uploading image:', error);
-        res.status(500).json({ error: 'Failed to upload image', details: error.message });
+        res.status(500).json({
+            error: 'Failed to upload image',
+            details: error.message,
+            hint: cloudinaryConfigured()
+                ? 'Cloudinary upload failed — check your API credentials.'
+                : 'Using local storage. If this failed, try a smaller JPG/PNG/WebP under 5MB.'
+        });
     }
 });
 
@@ -715,6 +728,7 @@ app.get('/sitemap.xml', async (req, res) => {
         { loc: `${base}/about`, priority: '0.9', freq: 'monthly', images: [partnerImg] },
         { loc: `${base}/practice`, priority: '0.8', freq: 'monthly' },
         { loc: `${base}/blog.html`, priority: '0.8', freq: 'weekly' },
+        { loc: `${base}/insights`, priority: '0.8', freq: 'weekly' },
         { loc: `${base}/contact`, priority: '0.7', freq: 'monthly' }
     ];
     try {
@@ -762,21 +776,17 @@ registerSeoRoutes(app, {
     postsCollection: () => postsCollection
 });
 
+// Uploaded blog images (local fallback when Cloudinary is not configured)
+app.use('/uploads', express.static(UPLOADS_DIR));
+
 // Static assets — after SEO routes so blog pages get server-rendered meta for Google
 app.use(express.static(__dirname));
 
-// Clean multi-page URLs (each nav item is its own page)
-app.get('/about',    (req, res) => res.sendFile(path.join(__dirname, 'about.html')));
-app.get('/practice', (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
-app.get('/contact',  (req, res) => res.sendFile(path.join(__dirname, 'contact.html')));
+// Clean multi-page URLs — SEO patched server-side for correct canonicals on any domain
+// (handled inside registerSeoRoutes)
 
 // Hidden admin entry — reached via the 10-tap gesture. Password is still required.
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin-files', 'admin.html')));
-
-// Serve index.html for root
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
 
 // Start server FIRST, then connect to MongoDB
 app.listen(PORT, () => {

@@ -382,9 +382,11 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
             });
             if (uploadResponse.status === 401) return handleUnauthorized();
             if (uploadResponse.ok) {
-                coverImageUrl = (await uploadResponse.json()).url;
+                const up = await uploadResponse.json();
+                coverImageUrl = up.url;
             } else {
-                alert('Failed to upload cover image. Continuing without image change...');
+                const err = await uploadResponse.json().catch(function () { return {}; });
+                alert('Cover image upload failed: ' + (err.details || err.error || err.hint || ('HTTP ' + uploadResponse.status)) + '\n\nTip: add CLOUDINARY_* vars on Railway for permanent CDN hosting.');
             }
         } catch (error) {
             alert('Error uploading image. Continuing without image change...');

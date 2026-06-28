@@ -97,6 +97,11 @@ function patchPostHead(html, post, base, postUrl) {
     );
     const ld = `<script type="application/ld+json">${JSON.stringify(blogPostingSchema(post, base, postUrl))}</script>`;
     html = html.replace('</head>', `${ld}\n</head>`);
+    if (!html.includes('max-image-preview')) {
+        html = html.replace('</head>',
+            `<meta name="googlebot" content="index, follow, max-image-preview:large">\n` +
+            `<meta property="og:locale" content="en_NG">\n</head>`);
+    }
     return html;
 }
 
@@ -140,6 +145,26 @@ function renderBlogIndexExtras(posts, base) {
     };
 }
 
+function patchStaticPageSeo(html, base, pagePath) {
+    const url = base + pagePath;
+    html = html.replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${escHtml(url)}">`);
+    html = html.replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${escHtml(url)}">`);
+    html = html.replace(/content="(precious-enoch-2\.jpg)"/g, `content="${escHtml(base + '/precious-enoch-2.jpg')}"`);
+    html = html.replace(/content="(favicon\.svg)"/g, `content="${escHtml(base + '/favicon.svg')}"`);
+    if (!html.includes('max-image-preview')) {
+        html = html.replace('</head>',
+            `<meta name="googlebot" content="index, follow, max-image-preview:large">\n` +
+            `<meta property="og:locale" content="en_NG">\n</head>`);
+    }
+    return html;
+}
+
+function sendStaticPage(res, root, base, file, pagePath) {
+    let html = fs.readFileSync(path.join(root, file), 'utf8');
+    html = patchStaticPageSeo(html, base, pagePath);
+    res.type('html').send(html);
+}
+
 function registerSeoRoutes(app, ctx) {
     const root = ctx.rootDir;
 
@@ -176,6 +201,8 @@ function registerSeoRoutes(app, ctx) {
     app.get(['/blog.html', '/insights'], async (req, res) => {
         let html = fs.readFileSync(path.join(root, 'blog.html'), 'utf8');
         const base = ctx.siteBase(req);
+        const pagePath = req.path === '/insights' ? '/insights' : '/blog.html';
+        html = patchStaticPageSeo(html, base, pagePath);
         try {
             const posts = await getPosts();
             if (posts.length) {
@@ -219,13 +246,19 @@ function registerSeoRoutes(app, ctx) {
             `<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">\n` +
             `<channel>\n` +
             `  <title>Enoch &amp; Enoch Legal — Legal Insights</title>\n` +
-            `  <link>${esc(base)}/blog.html</link>\n` +
+            `  <link>${esc(base)}/insights</link>\n` +
             `  <description>Articles on corporate law, compliance, debt recovery, and insolvency by Precious C. Enoch, Esq.</description>\n` +
             `  <language>en-ng</language>\n` +
             items +
             `\n</channel>\n</rss>\n`
         );
     });
+
+    // Static pages — server-side canonical + social URLs for Google (no hard-coded domain)
+    app.get('/', (req, res) => sendStaticPage(res, root, ctx.siteBase(req), 'index.html', '/'));
+    app.get('/about', (req, res) => sendStaticPage(res, root, ctx.siteBase(req), 'about.html', '/about'));
+    app.get('/practice', (req, res) => sendStaticPage(res, root, ctx.siteBase(req), 'practice.html', '/practice'));
+    app.get('/contact', (req, res) => sendStaticPage(res, root, ctx.siteBase(req), 'contact.html', '/contact'));
 }
 
 module.exports = { registerSeoRoutes, escHtml, postImage };
