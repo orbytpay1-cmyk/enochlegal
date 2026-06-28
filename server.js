@@ -561,7 +561,7 @@ function maskIp(ip) {
     return ip;
 }
 
-const LIVE_WINDOW_MS = 35000; // "online now" if seen within the last 35 seconds
+const LIVE_WINDOW_MS = 45000; // "online now" if seen within the last 45 seconds
 
 // Record a visit / heartbeat (public — fired by every page via analytics.js)
 app.post('/api/track', async (req, res) => {

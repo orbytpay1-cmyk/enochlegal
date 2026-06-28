@@ -86,7 +86,7 @@ let analyticsTimer = null;
 function startAnalytics() {
     refreshAnalytics();
     if (analyticsTimer) clearInterval(analyticsTimer);
-    analyticsTimer = setInterval(refreshAnalytics, 4000); // real-time feel
+    analyticsTimer = setInterval(refreshAnalytics, 3000);
 }
 function stopAnalytics() {
     if (analyticsTimer) { clearInterval(analyticsTimer); analyticsTimer = null; }
@@ -124,11 +124,32 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '
 function num(n) { return (n || 0).toLocaleString(); }
 
 async function refreshAnalytics() {
+    const statusEl = document.getElementById('analyticsStatus');
+    const statusText = document.getElementById('analyticsStatusText');
     try {
         const r = await fetch(`${API_URL}/api/admin/analytics`, { headers: authHeaders() });
         if (r.status === 401) return handleUnauthorized();
-        if (!r.ok) return;
+        if (r.status === 503) {
+            if (statusEl) { statusEl.className = 'analytics-status error'; }
+            if (statusText) statusText.textContent = 'Database offline — analytics paused until MongoDB reconnects.';
+            return;
+        }
+        if (!r.ok) {
+            if (statusEl) { statusEl.className = 'analytics-status warn'; }
+            if (statusText) statusText.textContent = 'Could not refresh analytics. Retrying…';
+            return;
+        }
         const d = await r.json();
+
+        if (statusEl) statusEl.className = 'analytics-status' + (d.liveNow > 0 ? '' : ' warn');
+        if (statusText) {
+            const t = new Date(d.serverTime || Date.now()).toLocaleTimeString();
+            if (d.liveNow > 0) {
+                statusText.textContent = `Live feed active · ${d.liveNow} on site now · updated ${t}`;
+            } else {
+                statusText.textContent = `Live feed active · 0 on site now · updated ${t}. Visits are counted on your Railway URL only (open the public site in another tab to test).`;
+            }
+        }
 
         // Header + stat cards
         setText('headLive', (d.liveNow || 0) + ' live now');

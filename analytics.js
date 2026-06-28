@@ -1,5 +1,5 @@
 // Lightweight visitor analytics beacon — powers the live admin dashboard.
-// Tracks a per-browser session, page views, and active time-on-site.
+// Fires on every public page; sends enter + heartbeat so "Live Now" stays accurate.
 (function () {
   var KEY = 'eel_sid';
   var sid;
@@ -29,16 +29,28 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: body,
-          keepalive: true
+          keepalive: true,
+          credentials: 'same-origin'
         }).catch(function () {});
       }
     } catch (e) {}
   }
 
+  function ping() {
+    if (document.visibilityState !== 'visible') return;
+    send('heartbeat');
+  }
+
+  // First hit + keep-alive every 10s while tab is visible
   send('enter');
-  setInterval(function () { if (document.visibilityState === 'visible') send('heartbeat'); }, 15000);
+  setTimeout(ping, 2000);
+  setInterval(ping, 10000);
+
   document.addEventListener('visibilitychange', function () {
-    send(document.visibilityState === 'hidden' ? 'leave' : 'heartbeat');
+    if (document.visibilityState === 'hidden') send('leave');
+    else { send('enter'); ping(); }
   });
+  window.addEventListener('focus', ping);
+  window.addEventListener('pageshow', ping);
   window.addEventListener('pagehide', function () { send('leave'); });
 })();
