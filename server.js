@@ -563,6 +563,17 @@ function maskIp(ip) {
 
 const LIVE_WINDOW_MS = 45000; // "online now" if seen within the last 45 seconds
 
+// Admin / staff routes — never counted in "Live Now" (public site only)
+function isStaffPath(page) {
+    const p = (page || '').split('?')[0];
+    return p === '/admin' || p.startsWith('/admin/') || p.startsWith('/admin-files');
+}
+function isPublicVisitor(doc) {
+    if (!doc) return false;
+    if (doc.staff === true) return false;
+    return !isStaffPath(doc.lastPath);
+}
+
 // Record a visit / heartbeat (public — fired by every page via analytics.js)
 app.post('/api/track', async (req, res) => {
     try {
@@ -575,20 +586,39 @@ app.post('/api/track', async (req, res) => {
         const ipRaw = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
         const ua = (req.headers['user-agent'] || '').slice(0, 300);
         const page = (p || '/').toString().slice(0, 200);
+        const onStaff = isStaffPath(page);
 
         const existing = await visitsCollection.findOne({ sessionId });
         if (!existing) {
-            await visitsCollection.insertOne({
-                sessionId, firstSeen: now, lastSeen: now, totalMs: 0,
-                pageviews: 1, lastPath: page, lastTitle: (title || '').slice(0, 120),
-                paths: [page], referrer: (referrer || 'direct').toString().slice(0, 200),
-                ip: maskIp(ipRaw), device: parseDevice(ua)
+            if (onStaff) {
+                // Direct admin entry — do not create a public visitor record
+                await visitsCollection.insertOne({
+                    sessionId, firstSeen: now, lastSeen: now, totalMs: 0,
+                    pageviews: 0, lastPath: page, lastTitle: 'Admin Dashboard',
+                    paths: [], referrer: 'staff', ip: maskIp(ipRaw),
+                    device: parseDevice(ua), staff: true
+                });
+            } else {
+                await visitsCollection.insertOne({
+                    sessionId, firstSeen: now, lastSeen: now, totalMs: 0,
+                    pageviews: 1, lastPath: page, lastTitle: (title || '').slice(0, 120),
+                    paths: [page], referrer: (referrer || 'direct').toString().slice(0, 200),
+                    ip: maskIp(ipRaw), device: parseDevice(ua), staff: false
+                });
+            }
+        } else if (onStaff) {
+            await visitsCollection.updateOne({ sessionId }, {
+                $set: {
+                    lastSeen: now, lastPath: page, lastTitle: 'Admin Dashboard', staff: true
+                }
             });
         } else {
-            // Add only the elapsed time since the last beat, capped so idle tabs don't inflate it
             const delta = Math.min(Math.max(0, now - new Date(existing.lastSeen)), LIVE_WINDOW_MS);
             await visitsCollection.updateOne({ sessionId }, {
-                $set: { lastSeen: now, lastPath: page, lastTitle: (title || existing.lastTitle || '').slice(0, 120) },
+                $set: {
+                    lastSeen: now, lastPath: page, lastTitle: (title || existing.lastTitle || '').slice(0, 120),
+                    staff: false
+                },
                 $inc: { totalMs: delta, pageviews: event === 'enter' ? 1 : 0 },
                 $addToSet: { paths: page }
             });
@@ -607,16 +637,23 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         const liveCutoff = new Date(now - LIVE_WINDOW_MS);
         const dayCutoff = new Date(now - 24 * 60 * 60 * 1000);
 
+        const publicMatch = { staff: { $ne: true } };
+
         const totals = (await visitsCollection.aggregate([
+            { $match: publicMatch },
             { $group: { _id: null, totalMs: { $sum: '$totalMs' }, pageviews: { $sum: '$pageviews' }, count: { $sum: 1 } } }
         ]).toArray())[0] || { totalMs: 0, pageviews: 0, count: 0 };
 
-        const recentDocs = await visitsCollection.find().sort({ lastSeen: -1 }).limit(60).toArray();
-        const liveDocs = recentDocs.filter(d => new Date(d.lastSeen) >= liveCutoff);
-        const today = await visitsCollection.countDocuments({ firstSeen: { $gte: dayCutoff } });
+        const recentDocs = await visitsCollection.find(publicMatch).sort({ lastSeen: -1 }).limit(60).toArray();
+        const liveDocs = recentDocs.filter(d =>
+            isPublicVisitor(d) && new Date(d.lastSeen) >= liveCutoff
+        );
+        const today = await visitsCollection.countDocuments({ ...publicMatch, firstSeen: { $gte: dayCutoff } });
 
         const topPagesAgg = await visitsCollection.aggregate([
+            { $match: publicMatch },
             { $unwind: '$paths' },
+            { $match: { paths: { $not: { $regex: '^/admin' } } } },
             { $group: { _id: '$paths', visitors: { $sum: 1 } } },
             { $sort: { visitors: -1 } },
             { $limit: 8 }
@@ -631,7 +668,7 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
             device: d.device || {},
             ip: d.ip || '',
             firstSeen: d.firstSeen, lastSeen: d.lastSeen,
-            live: new Date(d.lastSeen) >= liveCutoff
+            live: isPublicVisitor(d) && new Date(d.lastSeen) >= liveCutoff
         });
 
         res.json({

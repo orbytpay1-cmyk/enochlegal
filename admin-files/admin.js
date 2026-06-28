@@ -145,14 +145,14 @@ async function refreshAnalytics() {
         if (statusText) {
             const t = new Date(d.serverTime || Date.now()).toLocaleTimeString();
             if (d.liveNow > 0) {
-                statusText.textContent = `Live feed active · ${d.liveNow} on site now · updated ${t}`;
+                statusText.textContent = `Tracking public site · ${d.liveNow} visitor${d.liveNow === 1 ? '' : 's'} live · updated ${t}`;
             } else {
-                statusText.textContent = `Live feed active · 0 on site now · updated ${t}. Visits are counted on your Railway URL only (open the public site in another tab to test).`;
+                statusText.textContent = `Tracking public site · 0 live · updated ${t}. Admin visits are excluded. Open the home page (Railway URL) in another tab to test.`;
             }
         }
 
         // Header + stat cards
-        setText('headLive', (d.liveNow || 0) + ' live now');
+        setText('headLive', (d.liveNow || 0) + ' on site');
         setText('statLive', num(d.liveNow));
         setText('statVisitors', num(d.totalVisitors));
         setText('statToday', num(d.today));
