@@ -129,16 +129,28 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: password })
           });
-          var data = await r.json().catch(function () { return {}; });
+          var ct = (r.headers.get('content-type') || '').toLowerCase();
+          var data = {};
+          if (ct.indexOf('application/json') !== -1) {
+            data = await r.json().catch(function () { return {}; });
+          }
           if (r.ok && data.token) {
             try { localStorage.setItem(TOKEN_KEY, data.token); } catch (err) {}
             window.location.href = '/admin';
             return;
           }
-          gateError.textContent = data.error || 'Invalid access code';
-          gateError.classList.add('show');
+          if (r.status === 404 || ct.indexOf('text/html') !== -1) {
+            gateError.textContent = 'Admin login is not available on this domain (static hosting only). Open the Railway site, then tap 10 times or go to /admin.';
+            gateError.classList.add('show');
+          } else if (r.status === 401) {
+            gateError.textContent = data.error || 'Invalid access code';
+            gateError.classList.add('show');
+          } else {
+            gateError.textContent = data.error || 'Login failed (HTTP ' + r.status + '). Use the Railway URL for admin access.';
+            gateError.classList.add('show');
+          }
         } catch (err) {
-          gateError.textContent = 'Could not reach the server. Please try again.';
+          gateError.textContent = 'Could not reach the server. Admin only works on the Railway URL, not Netlify.';
           gateError.classList.add('show');
         }
         btn.disabled = false;
