@@ -58,6 +58,8 @@ function showLogin() {
 function showDashboard() {
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('dashboard').classList.add('active');
+    var urlEl = document.getElementById('analyticsSiteUrl');
+    if (urlEl) urlEl.textContent = location.origin;
     loadBlogPosts();
     startAnalytics();
 }
@@ -82,11 +84,13 @@ function switchTab(tabName) {
 //  ANALYTICS — live viewers + visitor stats (auto-refreshing)
 // ============================================================
 let analyticsTimer = null;
+let analyticsRefreshing = false;
+let lastAnalyticsAt = 0;
 
 function startAnalytics() {
     refreshAnalytics();
     if (analyticsTimer) clearInterval(analyticsTimer);
-    analyticsTimer = setInterval(refreshAnalytics, 3000);
+    analyticsTimer = setInterval(refreshAnalytics, 2000);
 }
 function stopAnalytics() {
     if (analyticsTimer) { clearInterval(analyticsTimer); analyticsTimer = null; }
@@ -115,7 +119,17 @@ function timeAgo(date) {
 }
 function prettyPage(p) {
     if (!p) return '/';
-    const map = { '/': 'Home', '/about': 'About', '/practice': 'Practice Areas', '/contact': 'Contact', '/blog.html': 'Blog' };
+    const map = {
+        '/': 'Home',
+        '/about': 'About',
+        '/about.html': 'About',
+        '/practice': 'Practice Areas',
+        '/practice.html': 'Practice Areas',
+        '/contact': 'Contact',
+        '/contact.html': 'Contact',
+        '/blog.html': 'Blog',
+        '/insights': 'Blog'
+    };
     if (map[p]) return map[p];
     if (p.indexOf('/blog-post.html') === 0) return 'Article';
     return p;
@@ -124,10 +138,12 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '
 function num(n) { return (n || 0).toLocaleString(); }
 
 async function refreshAnalytics() {
+    if (analyticsRefreshing) return;
+    analyticsRefreshing = true;
     const statusEl = document.getElementById('analyticsStatus');
     const statusText = document.getElementById('analyticsStatusText');
     try {
-        const r = await fetch(`${API_URL}/api/admin/analytics`, { headers: authHeaders() });
+        const r = await fetch(`${API_URL}/api/admin/analytics`, { headers: authHeaders(), cache: 'no-store' });
         if (r.status === 401) return handleUnauthorized();
         if (r.status === 503) {
             if (statusEl) { statusEl.className = 'analytics-status error'; }
@@ -141,13 +157,15 @@ async function refreshAnalytics() {
         }
         const d = await r.json();
 
+        lastAnalyticsAt = Date.now();
         if (statusEl) statusEl.className = 'analytics-status' + (d.liveNow > 0 ? '' : ' warn');
         if (statusText) {
             const t = new Date(d.serverTime || Date.now()).toLocaleTimeString();
+            const sync = ' · syncs every 2s';
             if (d.liveNow > 0) {
-                statusText.textContent = `Tracking public site · ${d.liveNow} visitor${d.liveNow === 1 ? '' : 's'} live · updated ${t}`;
+                statusText.textContent = `Live · ${d.liveNow} on public site · updated ${t}${sync}`;
             } else {
-                statusText.textContent = `Tracking public site · 0 live · updated ${t}. Admin visits are excluded. Open the home page (Railway URL) in another tab to test.`;
+                statusText.textContent = `0 live · updated ${t}${sync}. Test on ${location.origin}/ (Railway — not Netlify). Admin excluded.`;
             }
         }
 
@@ -163,7 +181,49 @@ async function refreshAnalytics() {
         renderTopPages(d.topPages || []);
         renderRecent(d.recent || []);
     } catch (e) { /* keep last view on transient errors */ }
+    finally { analyticsRefreshing = false; }
 }
+
+async function deleteVisitor(sessionId) {
+    if (!sessionId) return;
+    if (!confirm('Delete this visitor record? This cannot be undone.')) return;
+    try {
+        const r = await fetch(`${API_URL}/api/admin/analytics/visits/${encodeURIComponent(sessionId)}`, {
+            method: 'DELETE',
+            headers: authHeaders()
+        });
+        if (r.status === 401) return handleUnauthorized();
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            alert(err.error || 'Could not delete visitor record.');
+            return;
+        }
+        refreshAnalytics();
+    } catch (e) {
+        alert('Could not reach server: ' + e.message);
+    }
+}
+
+async function clearAllVisitors() {
+    if (!confirm('Delete ALL visitor records? Stats will reset to zero. This cannot be undone.')) return;
+    try {
+        const r = await fetch(`${API_URL}/api/admin/analytics/visits`, {
+            method: 'DELETE',
+            headers: authHeaders()
+        });
+        if (r.status === 401) return handleUnauthorized();
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            alert(err.error || 'Could not clear visitor records.');
+            return;
+        }
+        refreshAnalytics();
+    } catch (e) {
+        alert('Could not reach server: ' + e.message);
+    }
+}
+
+document.getElementById('clearAllVisitsBtn')?.addEventListener('click', clearAllVisitors);
 function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 
 function renderLive(live) {
@@ -196,19 +256,26 @@ function renderTopPages(pages) {
 function renderRecent(rows) {
     const el = document.getElementById('recentVisitors');
     if (!el) return;
-    if (!rows.length) { el.innerHTML = '<tr><td colspan="7" class="muted-note">No visitors recorded yet.</td></tr>'; return; }
+    if (!rows.length) { el.innerHTML = '<tr><td colspan="8" class="muted-note">No visitors recorded yet.</td></tr>'; return; }
     el.innerHTML = rows.map(v => `
-        <tr>
-            <td>${esc(v.id)} ${v.live ? '<span class="tag dot-live">live</span>' : ''}</td>
+        <tr data-session-id="${esc(v.sessionId || '')}">
+            <td title="${esc(v.sessionId || '')}">${esc(v.id)} ${v.live ? '<span class="tag dot-live">live</span>' : ''}</td>
             <td>${esc(prettyPage(v.page))}</td>
             <td>${num(v.pageviews)}</td>
             <td><strong>${fmtDuration(v.totalMs)}</strong></td>
-            <td><span class="tag">${esc((v.device && v.device.type) || '—')} · ${esc((v.device && v.device.os) || '')}</span></td>
+            <td><span class="tag">${esc((v.device && v.device.type) || '—')} · ${esc((v.device && v.device.browser) || (v.device && v.device.os) || '')}</span></td>
             <td>${esc(v.referrer || 'direct')}</td>
             <td>${timeAgo(v.lastSeen)}</td>
+            <td><button type="button" class="btn-small btn-delete btn-icon-delete" data-delete-visit="${esc(v.sessionId || '')}">Delete</button></td>
         </tr>
     `).join('');
 }
+
+document.getElementById('recentVisitors')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-delete-visit]');
+    if (!btn) return;
+    deleteVisitor(btn.getAttribute('data-delete-visit'));
+});
 
 // ============================================================
 //  BLOG POSTS — create, edit, schedule, draft, publish
@@ -246,7 +313,10 @@ function updatePublishUI() {
     const row = document.getElementById('scheduleRow');
     const sched = document.getElementById('postScheduleAt');
     if (row) row.classList.toggle('show', mode === 'schedule');
-    if (sched) sched.required = mode === 'schedule';
+    if (sched) {
+        sched.required = mode === 'schedule';
+        if (mode !== 'schedule') sched.value = '';
+    }
     const btn = document.getElementById('postSubmitBtn');
     if (btn) {
         const editing = !!document.getElementById('editPostId').value;
@@ -284,8 +354,10 @@ function cancelEditPost() {
 function postStatusBadge(post) {
     const st = post.status || 'published';
     if (st === 'draft') return '<span class="status-badge status-draft">Draft</span>';
-    if (st === 'scheduled') {
-        const when = post.publishAt ? new Date(post.publishAt).toLocaleString() : 'Pending';
+    const pubAt = post.publishAt ? new Date(post.publishAt) : null;
+    const future = pubAt && !Number.isNaN(pubAt.getTime()) && pubAt > new Date();
+    if (st === 'scheduled' || future) {
+        const when = pubAt ? pubAt.toLocaleString() : 'Pending';
         return `<span class="status-badge status-scheduled">Scheduled · ${esc(when)}</span>`;
     }
     return '<span class="status-badge status-published">Published</span>';
@@ -404,7 +476,9 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
         coverImage: coverImageUrl,
         displayDate: document.getElementById('postDisplayDate').value,
         publishMode,
-        scheduleAt: document.getElementById('postScheduleAt').value || null
+        scheduleAt: publishMode === 'schedule'
+            ? (document.getElementById('postScheduleAt').value || null)
+            : null
     };
 
     try {
@@ -423,7 +497,13 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
             let msg = '✅ Blog post saved successfully!';
             if (st === 'draft') msg = '✅ Draft saved — hidden from the public site.';
             else if (st === 'scheduled') msg = '✅ Post scheduled — it will auto-publish at the chosen time.';
-            else msg = editId ? '✅ Post updated and live on the site.' : '✅ Blog post published successfully!';
+            else {
+                const pid = data.post && data.post.id;
+                const blogUrl = pid ? `${location.origin}/blog-post.html?id=${pid}` : `${location.origin}/insights`;
+                msg = editId
+                    ? `✅ Post updated. View it: ${blogUrl}`
+                    : `✅ Published. View it: ${blogUrl} (same Railway URL — not enochlegal.com/Netlify).`;
+            }
             successMsg.textContent = msg;
             successMsg.classList.add('show');
             resetPostForm();

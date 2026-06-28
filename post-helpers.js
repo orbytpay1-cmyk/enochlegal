@@ -60,8 +60,10 @@ function buildPostFields(body, existing) {
             publishAt = sched;
         }
     } else {
+        // Publish now — always use current time. Do not reuse scheduleAt (hidden field
+        // can still hold a future date and accidentally hide the post from the public API).
         status = 'published';
-        publishAt = parseDateInput(body.scheduleAt) || now;
+        publishAt = now;
     }
 
     return {

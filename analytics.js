@@ -1,13 +1,15 @@
-// Lightweight visitor analytics beacon — powers the live admin dashboard.
-// Fires on every public page; sends enter + heartbeat so "Live Now" stays accurate.
+// Visitor analytics — powers the live admin dashboard (public site only).
 (function () {
   var KEY = 'eel_sid';
   var sid;
   try {
     sid = localStorage.getItem(KEY);
-    if (!sid) { sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem(KEY, sid); }
+    if (!sid) {
+      sid = 'pub_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem(KEY, sid);
+    }
   } catch (e) {
-    sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    sid = 'pub_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
   var ref = document.referrer;
@@ -22,17 +24,18 @@
         event: event,
         referrer: ref
       });
-      if (event === 'leave' && navigator.sendBeacon) {
+      // sendBeacon is more reliable on mobile Safari / background tabs
+      if (navigator.sendBeacon) {
         navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
-      } else {
-        fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: body,
-          keepalive: true,
-          credentials: 'same-origin'
-        }).catch(function () {});
+        return;
       }
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+        keepalive: true,
+        credentials: 'same-origin'
+      }).catch(function () {});
     } catch (e) {}
   }
 
@@ -41,10 +44,10 @@
     send('heartbeat');
   }
 
-  // First hit + keep-alive every 10s while tab is visible
   send('enter');
-  setTimeout(ping, 2000);
-  setInterval(ping, 10000);
+  setTimeout(ping, 1500);
+  setTimeout(ping, 5000);
+  setInterval(ping, 8000);
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') send('leave');

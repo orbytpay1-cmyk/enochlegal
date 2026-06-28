@@ -584,7 +584,16 @@ function isStaffPath(page) {
 function isPublicVisitor(doc) {
     if (!doc) return false;
     if (doc.staff === true) return false;
+    if (String(doc.sessionId || '').startsWith('staff_')) return false;
     return !isStaffPath(doc.lastPath);
+}
+
+function publicVisitorQuery() {
+    return {
+        staff: { $ne: true },
+        sessionId: { $not: { $regex: '^staff_' } },
+        lastPath: { $not: { $regex: '^/admin' } }
+    };
 }
 
 // Record a visit / heartbeat (public — fired by every page via analytics.js)
@@ -638,6 +647,7 @@ app.post('/api/track', async (req, res) => {
         }
         res.json({ ok: true });
     } catch (e) {
+        console.error('Track error:', e.message);
         res.json({ ok: false });
     }
 });
@@ -650,7 +660,7 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         const liveCutoff = new Date(now - LIVE_WINDOW_MS);
         const dayCutoff = new Date(now - 24 * 60 * 60 * 1000);
 
-        const publicMatch = { staff: { $ne: true } };
+        const publicMatch = publicVisitorQuery();
 
         const totals = (await visitsCollection.aggregate([
             { $match: publicMatch },
@@ -673,7 +683,8 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         ]).toArray();
 
         const slim = d => ({
-            id: d.sessionId.slice(0, 8),
+            sessionId: d.sessionId,
+            id: d.sessionId.length <= 10 ? d.sessionId : d.sessionId.slice(0, 6) + '…' + d.sessionId.slice(-4),
             page: d.lastPath, title: d.lastTitle || '',
             pageviews: d.pageviews || 0,
             totalMs: d.totalMs || 0,
@@ -698,6 +709,41 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         });
     } catch (e) {
         res.status(500).json({ error: 'analytics failed', details: e.message });
+    }
+});
+
+// Delete one visitor session (admin)
+app.delete('/api/admin/analytics/visits/:sessionId', requireAuth, async (req, res) => {
+    try {
+        if (!isConnected || !visitsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const sessionId = decodeURIComponent(req.params.sessionId || '').trim();
+        if (!sessionId || sessionId.length > 80) {
+            return res.status(400).json({ error: 'Invalid session id' });
+        }
+        const result = await visitsCollection.deleteOne({ sessionId });
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ error: 'Visit record not found' });
+        }
+        res.json({ success: true, deleted: 1 });
+    } catch (e) {
+        console.error('Delete visit error:', e.message);
+        res.status(500).json({ error: 'Failed to delete visit', details: e.message });
+    }
+});
+
+// Clear all visitor records (admin)
+app.delete('/api/admin/analytics/visits', requireAuth, async (req, res) => {
+    try {
+        if (!isConnected || !visitsCollection) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const result = await visitsCollection.deleteMany({});
+        res.json({ success: true, deleted: result.deletedCount });
+    } catch (e) {
+        console.error('Clear visits error:', e.message);
+        res.status(500).json({ error: 'Failed to clear visits', details: e.message });
     }
 });
 
