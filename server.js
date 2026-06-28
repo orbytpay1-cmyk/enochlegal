@@ -6,9 +6,46 @@ const path = require('path');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust the Railway/hosting proxy so req.protocol reflects the real https scheme.
+// This keeps canonical URLs, sitemap and the API info links correct on any domain.
+app.set('trust proxy', true);
+
+// Absolute base URL for the current request (host-aware, so it is correct on the
+// Railway subdomain, a custom domain, or localhost without any hard-coded URL).
+function siteBase(req) {
+    return `${req.protocol}://${req.get('host')}`;
+}
+
+// ---- Admin auth (token-based) -------------------------------------------------
+// Password-only login. Override on Railway via ADMIN_PASSWORD if you rotate it.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '761733024737482465143681815056761006303106594842458082750423980112916864535756736339925761101951001313260448677944392036810305049575878960683399327558826205441864329176199115239260930714017255467530019236944604637828824744573794156006021397928955536093425914137697476346474024563046394438766275723880266316948600820296849021172403578240768760973622142689601980381555675801863532581949140512003408158386672046236477727503154733925276525605478267966884';
+const validTokens = new Map(); // token -> expiresAt (ms)
+
+function issueToken() {
+    const token = crypto.randomBytes(24).toString('hex');
+    validTokens.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    return token;
+}
+function isValidToken(token) {
+    const exp = validTokens.get(token);
+    if (!exp) return false;
+    if (Date.now() > exp) { validTokens.delete(token); return false; }
+    return true;
+}
+// Guards admin-only endpoints. Public read endpoints (GET posts) stay open.
+function requireAuth(req, res, next) {
+    const header = req.headers.authorization || '';
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : null;
+    const token = bearer || req.query.token;
+    if (token && isValidToken(token)) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+}
 
 // Configure email transporter
 const transporter = nodemailer.createTransport({
@@ -45,6 +82,7 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/enochl
 let db;
 let postsCollection;
 let messagesCollection;
+let visitsCollection;
 let isConnected = false;
 
 // Middleware
@@ -115,9 +153,9 @@ app.get('/api', async (req, res) => {
                 database: 'Connected'
             },
             links: {
-                website: 'https://enochlegal-production.up.railway.app',
-                admin: 'https://enochlegal-production.up.railway.app/admin-files/admin.html',
-                blog: 'https://enochlegal-production.up.railway.app/blog.html'
+                website: siteBase(req),
+                admin: `${siteBase(req)}/admin`,
+                blog: `${siteBase(req)}/blog.html`
             },
             timestamp: new Date().toISOString(),
             message: '⚡ API is operational and ready to serve requests'
@@ -166,7 +204,7 @@ app.get('/api/posts/:id', async (req, res) => {
 });
 
 // Upload image endpoint
-app.post('/api/upload-image', upload.single('image'), async (req, res) => {
+app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
@@ -194,7 +232,7 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
 });
 
 // Create new post
-app.post('/api/posts', async (req, res) => {
+app.post('/api/posts', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !postsCollection) {
             return res.status(503).json({ 
@@ -244,7 +282,7 @@ app.post('/api/posts', async (req, res) => {
 });
 
 // Delete post
-app.delete('/api/posts/:id', async (req, res) => {
+app.delete('/api/posts/:id', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !postsCollection) {
             return res.status(503).json({ error: 'Database not connected' });
@@ -261,15 +299,20 @@ app.delete('/api/posts/:id', async (req, res) => {
     }
 });
 
-// Admin login
+// Admin login — password only; issues a real, expiring token for admin endpoints
 app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    
-    if (username === 'prech114' && password === 'pre11726644472837466@@@') {
-        res.json({ success: true, token: 'admin-token-' + Date.now() });
+    const { password } = req.body;
+
+    if (password && password === ADMIN_PASSWORD) {
+        res.json({ success: true, token: issueToken() });
     } else {
-        res.status(401).json({ error: 'Invalid credentials' });
+        res.status(401).json({ error: 'Invalid access code' });
     }
+});
+
+// Verify a token is still valid (used by the dashboard on load)
+app.get('/api/admin/verify', requireAuth, (req, res) => {
+    res.json({ ok: true });
 });
 
 // Contact form submission - Save to database
@@ -357,7 +400,7 @@ app.post('/api/contact', async (req, res) => {
 });
 
 // Get all messages (admin only)
-app.get('/api/messages', async (req, res) => {
+app.get('/api/messages', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !messagesCollection) {
             return res.status(503).json({ error: 'Database not connected' });
@@ -371,7 +414,7 @@ app.get('/api/messages', async (req, res) => {
 });
 
 // Mark message as read
-app.patch('/api/messages/:id/read', async (req, res) => {
+app.patch('/api/messages/:id/read', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !messagesCollection) {
             return res.status(503).json({ error: 'Database not connected' });
@@ -388,7 +431,7 @@ app.patch('/api/messages/:id/read', async (req, res) => {
 });
 
 // Delete message
-app.delete('/api/messages/:id', async (req, res) => {
+app.delete('/api/messages/:id', requireAuth, async (req, res) => {
     try {
         if (!isConnected || !messagesCollection) {
             return res.status(503).json({ error: 'Database not connected' });
@@ -404,6 +447,194 @@ app.delete('/api/messages/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete message', details: error.message });
     }
 });
+
+// ---- Visitor analytics --------------------------------------------------------
+// One lightweight document per browser session. Powers the live dashboard.
+function parseDevice(ua) {
+    ua = ua || '';
+    let browser = 'Other';
+    if (/Edg\//.test(ua)) browser = 'Edge';
+    else if (/OPR\/|Opera/.test(ua)) browser = 'Opera';
+    else if (/Chrome\//.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//.test(ua)) browser = 'Firefox';
+    else if (/Safari\//.test(ua)) browser = 'Safari';
+    let os = 'Other';
+    if (/Windows/.test(ua)) os = 'Windows';
+    else if (/iPhone|iPad|iOS/.test(ua)) os = 'iOS';
+    else if (/Mac OS X|Macintosh/.test(ua)) os = 'macOS';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    const mobile = /Mobile|iPhone|Android/.test(ua);
+    return { browser, os, type: mobile ? 'Mobile' : 'Desktop' };
+}
+function maskIp(ip) {
+    if (!ip) return '';
+    if (ip.includes(':')) return ip.split(':').slice(0, 4).join(':') + '::';
+    const parts = ip.split('.');
+    if (parts.length === 4) { parts[3] = 'x'; return parts.join('.'); }
+    return ip;
+}
+
+const LIVE_WINDOW_MS = 35000; // "online now" if seen within the last 35 seconds
+
+// Record a visit / heartbeat (public — fired by every page via analytics.js)
+app.post('/api/track', async (req, res) => {
+    try {
+        if (!isConnected || !visitsCollection) return res.json({ ok: false });
+        const { sessionId, path: p, event, referrer, title } = req.body || {};
+        if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 80) {
+            return res.status(400).json({ error: 'bad session' });
+        }
+        const now = new Date();
+        const ipRaw = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+        const ua = (req.headers['user-agent'] || '').slice(0, 300);
+        const page = (p || '/').toString().slice(0, 200);
+
+        const existing = await visitsCollection.findOne({ sessionId });
+        if (!existing) {
+            await visitsCollection.insertOne({
+                sessionId, firstSeen: now, lastSeen: now, totalMs: 0,
+                pageviews: 1, lastPath: page, lastTitle: (title || '').slice(0, 120),
+                paths: [page], referrer: (referrer || 'direct').toString().slice(0, 200),
+                ip: maskIp(ipRaw), device: parseDevice(ua)
+            });
+        } else {
+            // Add only the elapsed time since the last beat, capped so idle tabs don't inflate it
+            const delta = Math.min(Math.max(0, now - new Date(existing.lastSeen)), LIVE_WINDOW_MS);
+            await visitsCollection.updateOne({ sessionId }, {
+                $set: { lastSeen: now, lastPath: page, lastTitle: (title || existing.lastTitle || '').slice(0, 120) },
+                $inc: { totalMs: delta, pageviews: event === 'enter' ? 1 : 0 },
+                $addToSet: { paths: page }
+            });
+        }
+        res.json({ ok: true });
+    } catch (e) {
+        res.json({ ok: false });
+    }
+});
+
+// Admin analytics snapshot (guarded) — polled by the dashboard for a real-time feed
+app.get('/api/admin/analytics', requireAuth, async (req, res) => {
+    try {
+        if (!isConnected || !visitsCollection) return res.status(503).json({ error: 'Database not connected' });
+        const now = Date.now();
+        const liveCutoff = new Date(now - LIVE_WINDOW_MS);
+        const dayCutoff = new Date(now - 24 * 60 * 60 * 1000);
+
+        const totals = (await visitsCollection.aggregate([
+            { $group: { _id: null, totalMs: { $sum: '$totalMs' }, pageviews: { $sum: '$pageviews' }, count: { $sum: 1 } } }
+        ]).toArray())[0] || { totalMs: 0, pageviews: 0, count: 0 };
+
+        const recentDocs = await visitsCollection.find().sort({ lastSeen: -1 }).limit(60).toArray();
+        const liveDocs = recentDocs.filter(d => new Date(d.lastSeen) >= liveCutoff);
+        const today = await visitsCollection.countDocuments({ firstSeen: { $gte: dayCutoff } });
+
+        const topPagesAgg = await visitsCollection.aggregate([
+            { $unwind: '$paths' },
+            { $group: { _id: '$paths', visitors: { $sum: 1 } } },
+            { $sort: { visitors: -1 } },
+            { $limit: 8 }
+        ]).toArray();
+
+        const slim = d => ({
+            id: d.sessionId.slice(0, 8),
+            page: d.lastPath, title: d.lastTitle || '',
+            pageviews: d.pageviews || 0,
+            totalMs: d.totalMs || 0,
+            referrer: d.referrer || 'direct',
+            device: d.device || {},
+            ip: d.ip || '',
+            firstSeen: d.firstSeen, lastSeen: d.lastSeen,
+            live: new Date(d.lastSeen) >= liveCutoff
+        });
+
+        res.json({
+            liveNow: liveDocs.length,
+            totalVisitors: totals.count,
+            totalPageviews: totals.pageviews,
+            totalTimeMs: totals.totalMs,
+            avgTimeMs: totals.count ? Math.round(totals.totalMs / totals.count) : 0,
+            today,
+            live: liveDocs.map(slim),
+            recent: recentDocs.slice(0, 40).map(slim),
+            topPages: topPagesAgg.map(t => ({ path: t._id, visitors: t.visitors })),
+            serverTime: new Date().toISOString()
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'analytics failed', details: e.message });
+    }
+});
+
+// robots.txt — host-aware, points crawlers at the sitemap, hides the admin panel
+app.get('/robots.txt', (req, res) => {
+    const base = siteBase(req);
+    res.type('text/plain').send(
+        `User-agent: *\n` +
+        `Allow: /\n` +
+        `Disallow: /admin\n` +
+        `Disallow: /admin-files/\n` +
+        `Disallow: /api/\n\n` +
+        `Sitemap: ${base}/sitemap.xml\n`
+    );
+});
+
+// sitemap.xml — host-aware, includes every page + post, with image entries so the
+// firm's photography (Precious C. Enoch, Esq.) is discovered and indexed by Google.
+app.get('/sitemap.xml', async (req, res) => {
+    const base = siteBase(req);
+    const partnerImg = {
+        loc: `${base}/precious-enoch-2.jpg`,
+        title: 'Precious C. Enoch, Esq. — Principal Partner, Enoch & Enoch Legal',
+        caption: 'Precious C. Enoch, Esq., Principal Partner at Enoch & Enoch Legal, Lagos, Nigeria.'
+    };
+    const urls = [
+        { loc: `${base}/`, priority: '1.0', freq: 'weekly', images: [partnerImg] },
+        { loc: `${base}/about`, priority: '0.9', freq: 'monthly', images: [partnerImg] },
+        { loc: `${base}/practice`, priority: '0.8', freq: 'monthly' },
+        { loc: `${base}/blog.html`, priority: '0.8', freq: 'weekly' },
+        { loc: `${base}/contact`, priority: '0.7', freq: 'monthly' }
+    ];
+    try {
+        if (isConnected && postsCollection) {
+            const posts = await postsCollection.find({}, { projection: { id: 1, title: 1, coverImage: 1, created_at: 1 } }).sort({ id: -1 }).toArray();
+            posts.forEach(p => urls.push({
+                loc: `${base}/blog-post.html?id=${p.id}`,
+                priority: '0.6',
+                freq: 'monthly',
+                lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : undefined,
+                images: p.coverImage ? [{ loc: p.coverImage, title: p.title || '', caption: p.title || '' }] : []
+            }));
+        }
+    } catch (e) {
+        console.log('⚠️ sitemap: could not list posts:', e.message);
+    }
+    const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const body = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
+        urls.map(u =>
+            `  <url>\n    <loc>${esc(u.loc)}</loc>\n` +
+            (u.lastmod ? `    <lastmod>${u.lastmod}</lastmod>\n` : '') +
+            `    <changefreq>${u.freq}</changefreq>\n    <priority>${u.priority}</priority>\n` +
+            (u.images || []).map(img =>
+                `    <image:image>\n      <image:loc>${esc(img.loc)}</image:loc>\n` +
+                (img.title ? `      <image:title>${esc(img.title)}</image:title>\n` : '') +
+                (img.caption ? `      <image:caption>${esc(img.caption)}</image:caption>\n` : '') +
+                `    </image:image>\n`
+            ).join('') +
+            `  </url>`
+        ).join('\n') +
+        `\n</urlset>\n`;
+    res.type('application/xml').send(body);
+});
+
+// Clean multi-page URLs (each nav item is its own page)
+app.get('/about',    (req, res) => res.sendFile(path.join(__dirname, 'about.html')));
+app.get('/practice', (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
+app.get('/contact',  (req, res) => res.sendFile(path.join(__dirname, 'contact.html')));
+app.get('/insights', (req, res) => res.sendFile(path.join(__dirname, 'blog.html')));
+
+// Hidden admin entry — reached via the 10-tap gesture. Password is still required.
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin-files', 'admin.html')));
 
 // Serve index.html for root
 app.get('/', (req, res) => {
@@ -434,13 +665,43 @@ async function connectDB() {
         db = client.db();
         postsCollection = db.collection('posts');
         messagesCollection = db.collection('messages');
+        visitsCollection = db.collection('visits');
         isConnected = true;
         console.log('✅ Connected to MongoDB successfully!');
+
+        // Helpful indexes for analytics (safe to call repeatedly)
+        try {
+            await visitsCollection.createIndex({ sessionId: 1 }, { unique: true });
+            await visitsCollection.createIndex({ lastSeen: -1 });
+            await visitsCollection.createIndex({ firstSeen: -1 });
+        } catch (ixErr) { /* index may already exist */ }
         
         // Test the connection
         const count = await postsCollection.countDocuments();
         console.log(`📊 Found ${count} posts in database`);
-        
+
+        // Auto-seed: if the collection is brand new / empty, load the bundled posts.json
+        // so a freshly-provisioned database (e.g. on a new Railway account) is never blank.
+        if (count === 0) {
+            try {
+                const seedPath = path.join(__dirname, 'posts.json');
+                if (fs.existsSync(seedPath)) {
+                    const seed = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+                    if (Array.isArray(seed) && seed.length) {
+                        const docs = seed.map(p => ({
+                            ...p,
+                            read_time: p.read_time || p.readTime || '5 min read',
+                            created_at: p.created_at ? new Date(p.created_at) : new Date()
+                        }));
+                        await postsCollection.insertMany(docs);
+                        console.log(`🌱 Seeded ${docs.length} starter post(s) from posts.json`);
+                    }
+                }
+            } catch (seedErr) {
+                console.log('⚠️ Auto-seed skipped:', seedErr.message);
+            }
+        }
+
     } catch (error) {
         console.error('❌ MongoDB connection error:', error.message);
         console.log('⚠️ Server will continue but database operations will fail');

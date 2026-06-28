@@ -1,155 +1,249 @@
-// Admin credentials
-const ADMIN_USERNAME = 'prech114';
-const ADMIN_PASSWORD = 'pre11726644472837466@@@';
+// Same-origin: admin panel is served by the same Express server as the API.
+const API_URL = '';
+const TOKEN_KEY = 'eel_admin_token';
 
-// API base URL - always use Railway backend
-const API_URL = 'https://enochlegal-production.up.railway.app';
+// ---- Token helpers ------------------------------------------------------------
+function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+function setToken(t) { try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+function authHeaders(extra) {
+    const h = Object.assign({}, extra || {});
+    const t = getToken();
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    return h;
+}
+function handleUnauthorized() { clearToken(); showLogin(); }
 
-// Check if user is logged in
-function checkAuth() {
-    const isLoggedIn = localStorage.getItem('adminLoggedIn');
-    if (isLoggedIn === 'true') {
-        showDashboard();
-    }
+// ---- Auth flow ----------------------------------------------------------------
+async function checkAuth() {
+    const t = getToken();
+    if (!t) return showLogin();
+    try {
+        const r = await fetch(`${API_URL}/api/admin/verify`, { headers: authHeaders() });
+        if (r.ok) showDashboard(); else handleUnauthorized();
+    } catch (e) { showLogin(); }
 }
 
-// Login handler
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
+    const password = document.getElementById('password').value.trim();
     const errorDiv = document.getElementById('loginError');
-
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        localStorage.setItem('adminLoggedIn', 'true');
-        showDashboard();
-    } else {
-        errorDiv.textContent = 'Invalid username or password';
+    try {
+        const r = await fetch(`${API_URL}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && data.token) {
+            setToken(data.token);
+            showDashboard();
+        } else {
+            errorDiv.textContent = data.error || 'Invalid access code';
+            errorDiv.classList.add('show');
+            setTimeout(() => errorDiv.classList.remove('show'), 3000);
+        }
+    } catch (err) {
+        errorDiv.textContent = 'Could not reach the server. Please try again.';
         errorDiv.classList.add('show');
-        setTimeout(() => {
-            errorDiv.classList.remove('show');
-        }, 3000);
+        setTimeout(() => errorDiv.classList.remove('show'), 3000);
     }
 });
 
-// Show dashboard
+function showLogin() {
+    document.getElementById('loginPage').style.display = 'flex';
+    document.getElementById('dashboard').classList.remove('active');
+    stopAnalytics();
+}
 function showDashboard() {
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('dashboard').classList.add('active');
     loadBlogPosts();
+    startAnalytics();
 }
-
-// Logout
 function logout() {
-    localStorage.removeItem('adminLoggedIn');
+    clearToken();
     location.reload();
 }
 
-// Switch tabs
+// ---- Tabs ---------------------------------------------------------------------
 function switchTab(tabName) {
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    
-    event.target.classList.add('active');
+    if (event && event.target) event.target.classList.add('active');
     document.getElementById(tabName).classList.add('active');
-    
-    if (tabName === 'manage-posts') {
-        loadBlogPosts();
-    } else if (tabName === 'messages') {
-        loadMessages();
-    }
+
+    if (tabName === 'manage-posts') loadBlogPosts();
+    else if (tabName === 'messages') loadMessages();
+    else if (tabName === 'analytics') refreshAnalytics();
 }
 
-// Insert HTML tags
+// ============================================================
+//  ANALYTICS — live viewers + visitor stats (auto-refreshing)
+// ============================================================
+let analyticsTimer = null;
+
+function startAnalytics() {
+    refreshAnalytics();
+    if (analyticsTimer) clearInterval(analyticsTimer);
+    analyticsTimer = setInterval(refreshAnalytics, 4000); // real-time feel
+}
+function stopAnalytics() {
+    if (analyticsTimer) { clearInterval(analyticsTimer); analyticsTimer = null; }
+}
+
+function fmtDuration(ms) {
+    ms = Math.max(0, ms || 0);
+    const s = Math.round(ms / 1000);
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60), rs = s % 60;
+    if (m < 60) return m + 'm ' + rs + 's';
+    const h = Math.floor(m / 60), rm = m % 60;
+    return h + 'h ' + rm + 'm';
+}
+function timeAgo(date) {
+    if (!date) return '—';
+    const diff = Date.now() - new Date(date).getTime();
+    const s = Math.round(diff / 1000);
+    if (s < 10) return 'just now';
+    if (s < 60) return s + 's ago';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
+}
+function prettyPage(p) {
+    if (!p) return '/';
+    const map = { '/': 'Home', '/about': 'About', '/practice': 'Practice Areas', '/contact': 'Contact', '/blog.html': 'Blog' };
+    if (map[p]) return map[p];
+    if (p.indexOf('/blog-post.html') === 0) return 'Article';
+    return p;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function num(n) { return (n || 0).toLocaleString(); }
+
+async function refreshAnalytics() {
+    try {
+        const r = await fetch(`${API_URL}/api/admin/analytics`, { headers: authHeaders() });
+        if (r.status === 401) return handleUnauthorized();
+        if (!r.ok) return;
+        const d = await r.json();
+
+        // Header + stat cards
+        setText('headLive', (d.liveNow || 0) + ' live now');
+        setText('statLive', num(d.liveNow));
+        setText('statVisitors', num(d.totalVisitors));
+        setText('statToday', num(d.today));
+        setText('statViews', num(d.totalPageviews));
+        setText('statAvgTime', fmtDuration(d.avgTimeMs));
+
+        renderLive(d.live || []);
+        renderTopPages(d.topPages || []);
+        renderRecent(d.recent || []);
+    } catch (e) { /* keep last view on transient errors */ }
+}
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+
+function renderLive(live) {
+    const el = document.getElementById('liveList');
+    if (!el) return;
+    if (!live.length) { el.innerHTML = '<li class="muted-note">No visitors on the site right now.</li>'; return; }
+    el.innerHTML = live.map(v => `
+        <li class="live-item">
+            <div class="live-avatar">${esc((v.id || '?').slice(0, 2).toUpperCase())}</div>
+            <div class="live-meta">
+                <div class="lm-page">${esc(prettyPage(v.page))} <span class="pill-live">LIVE</span></div>
+                <div class="lm-sub">${esc((v.device && v.device.type) || 'Device')} · ${esc((v.device && v.device.browser) || '')} · ${esc(v.referrer || 'direct')}</div>
+            </div>
+            <div class="live-time">${fmtDuration(v.totalMs)}</div>
+        </li>
+    `).join('');
+}
+function renderTopPages(pages) {
+    const el = document.getElementById('topPages');
+    if (!el) return;
+    if (!pages.length) { el.innerHTML = '<li class="muted-note">No data yet.</li>'; return; }
+    const max = Math.max.apply(null, pages.map(p => p.visitors));
+    el.innerHTML = pages.map(p => `
+        <li class="top-page-row">
+            <span class="tp-path">${esc(prettyPage(p.path))}</span>
+            <span class="tp-count">${num(p.visitors)}</span>
+        </li>
+    `).join('');
+}
+function renderRecent(rows) {
+    const el = document.getElementById('recentVisitors');
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = '<tr><td colspan="7" class="muted-note">No visitors recorded yet.</td></tr>'; return; }
+    el.innerHTML = rows.map(v => `
+        <tr>
+            <td>${esc(v.id)} ${v.live ? '<span class="tag dot-live">live</span>' : ''}</td>
+            <td>${esc(prettyPage(v.page))}</td>
+            <td>${num(v.pageviews)}</td>
+            <td><strong>${fmtDuration(v.totalMs)}</strong></td>
+            <td><span class="tag">${esc((v.device && v.device.type) || '—')} · ${esc((v.device && v.device.os) || '')}</span></td>
+            <td>${esc(v.referrer || 'direct')}</td>
+            <td>${timeAgo(v.lastSeen)}</td>
+        </tr>
+    `).join('');
+}
+
+// ============================================================
+//  BLOG POSTS
+// ============================================================
 function insertTag(tag) {
     const textarea = document.getElementById('postContent');
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const start = textarea.selectionStart, end = textarea.selectionEnd;
     const selectedText = textarea.value.substring(start, end);
-    
     let insertion = '';
-    switch(tag) {
-        case 'h2':
-            insertion = `<h2>${selectedText || 'Heading'}</h2>\n`;
-            break;
-        case 'h3':
-            insertion = `<h3>${selectedText || 'Subheading'}</h3>\n`;
-            break;
-        case 'p':
-            insertion = `<p>${selectedText || 'Your paragraph text here'}</p>\n`;
-            break;
-        case 'ul':
-            insertion = `<ul>\n    <li>${selectedText || 'List item 1'}</li>\n    <li>List item 2</li>\n</ul>\n`;
-            break;
-        case 'blockquote':
-            insertion = `<blockquote>\n    "${selectedText || 'Your quote here'}"\n</blockquote>\n`;
-            break;
+    switch (tag) {
+        case 'h2': insertion = `<h2>${selectedText || 'Heading'}</h2>\n`; break;
+        case 'h3': insertion = `<h3>${selectedText || 'Subheading'}</h3>\n`; break;
+        case 'p': insertion = `<p>${selectedText || 'Your paragraph text here'}</p>\n`; break;
+        case 'ul': insertion = `<ul>\n    <li>${selectedText || 'List item 1'}</li>\n    <li>List item 2</li>\n</ul>\n`; break;
+        case 'blockquote': insertion = `<blockquote>\n    "${selectedText || 'Your quote here'}"\n</blockquote>\n`; break;
     }
-    
     textarea.value = textarea.value.substring(0, start) + insertion + textarea.value.substring(end);
     textarea.focus();
 }
 
-// Convert normal text to HTML
 function textToHtml(text) {
-    // Split by double line breaks (paragraphs)
     const paragraphs = text.split(/\n\n+/);
-    
     let html = '';
     paragraphs.forEach(para => {
         para = para.trim();
         if (!para) return;
-        
-        // Check if it looks like a heading (short line, no punctuation at end)
-        if (para.length < 60 && !para.match(/[.!?]$/)) {
-            html += `<h2>${para}</h2>\n`;
-        } else {
-            // Regular paragraph
-            html += `<p>${para}</p>\n`;
-        }
+        if (para.length < 60 && !para.match(/[.!?]$/)) html += `<h2>${para}</h2>\n`;
+        else html += `<p>${para}</p>\n`;
     });
-    
     return html;
 }
 
-// Handle new post submission
 document.getElementById('newPostForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
-    console.log('🚀 Form submitted - starting publish process...');
-    
-    const contentText = document.getElementById('postContent').value;
-    const contentHtml = textToHtml(contentText);
-    
+    const contentHtml = textToHtml(document.getElementById('postContent').value);
     let coverImageUrl = null;
-    
-    // Upload cover image if selected
+
     const imageFile = document.getElementById('postCoverImage').files[0];
     if (imageFile) {
-        console.log('📸 Uploading cover image...');
         try {
             const formData = new FormData();
             formData.append('image', imageFile);
-            
             const uploadResponse = await fetch(`${API_URL}/api/upload-image`, {
-                method: 'POST',
-                body: formData
+                method: 'POST', headers: authHeaders(), body: formData
             });
-            
+            if (uploadResponse.status === 401) return handleUnauthorized();
             if (uploadResponse.ok) {
-                const uploadResult = await uploadResponse.json();
-                coverImageUrl = uploadResult.url;
-                console.log('✅ Image uploaded:', coverImageUrl);
+                coverImageUrl = (await uploadResponse.json()).url;
             } else {
-                console.error('❌ Image upload failed');
                 alert('Failed to upload cover image. Continuing without image...');
             }
         } catch (error) {
-            console.error('❌ Image upload error:', error);
             alert('Error uploading image. Continuing without image...');
         }
     }
-    
+
     const newPost = {
         title: document.getElementById('postTitle').value,
         excerpt: document.getElementById('postExcerpt').value,
@@ -160,180 +254,89 @@ document.getElementById('newPostForm').addEventListener('submit', async (e) => {
         icon: document.getElementById('postIcon').value,
         coverImage: coverImageUrl
     };
-    
-    console.log('📝 Post data:', newPost);
-    console.log('🌐 API URL:', `${API_URL}/api/posts`);
-    
+
     try {
-        console.log('📡 Sending request to server...');
-        
-        // Send to backend API
         const response = await fetch(`${API_URL}/api/posts`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(newPost)
         });
-        
-        console.log('📥 Response status:', response.status, response.statusText);
-        
+        if (response.status === 401) return handleUnauthorized();
         if (response.ok) {
-            const result = await response.json();
-            console.log('✅ Success! Result:', result);
-            
-            // Show success message
             const successMsg = document.getElementById('successMessage');
             successMsg.textContent = '✅ Blog post published successfully!';
             successMsg.classList.add('show');
-            
-            // Reset form
             document.getElementById('newPostForm').reset();
             document.getElementById('uploadPlaceholder').style.display = 'block';
             document.getElementById('imagePreview').style.display = 'none';
-            
-            // Hide success message after 5 seconds
-            setTimeout(() => {
-                successMsg.classList.remove('show');
-            }, 5000);
-            
-            // Reload blog list if on that tab
+            setTimeout(() => successMsg.classList.remove('show'), 5000);
             loadBlogPosts();
         } else {
-            // Try to get error details from response
-            let errorMessage = 'Unknown error';
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorData.message || JSON.stringify(errorData);
-                console.error('❌ Server error response:', errorData);
-            } catch (e) {
-                errorMessage = response.statusText || `HTTP ${response.status}`;
-                console.error('❌ Could not parse error response');
-            }
-            
-            console.error('❌ Publish failed:', errorMessage);
-            alert(`❌ Error publishing post: ${errorMessage}\n\nCheck the console (F12) for more details.`);
+            let msg = 'Unknown error';
+            try { const ed = await response.json(); msg = ed.error || ed.message || JSON.stringify(ed); } catch (e) {}
+            alert('❌ Error publishing post: ' + msg);
         }
     } catch (error) {
-        console.error('❌ Network/Connection error:', error);
-        alert(`❌ Error connecting to server: ${error.message}\n\nPossible causes:\n- Server is not running\n- Network connection issue\n- CORS problem\n\nCheck the console (F12) for more details.`);
+        alert('❌ Error connecting to server: ' + error.message);
     }
 });
 
-// Image preview
-document.getElementById('postCoverImage').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        displayImagePreview(file);
-    }
+// Image preview + drag/drop
+document.getElementById('postCoverImage').addEventListener('change', function (e) {
+    const file = e.target.files[0]; if (file) displayImagePreview(file);
 });
-
-// Drag and drop functionality
 const uploadArea = document.getElementById('imageUploadArea');
 const fileInput = document.getElementById('postCoverImage');
 const uploadPlaceholder = document.getElementById('uploadPlaceholder');
 const imagePreview = document.getElementById('imagePreview');
 const removeImageBtn = document.getElementById('removeImageBtn');
-
-// Click to upload
 uploadArea.addEventListener('click', (e) => {
-    if (e.target.id !== 'removeImageBtn' && !e.target.closest('#removeImageBtn')) {
-        fileInput.click();
-    }
+    if (e.target.id !== 'removeImageBtn' && !e.target.closest('#removeImageBtn')) fileInput.click();
 });
-
-// Prevent default drag behaviors
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    uploadArea.addEventListener(eventName, preventDefaults, false);
-    document.body.addEventListener(eventName, preventDefaults, false);
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+    uploadArea.addEventListener(ev, preventDefaults, false);
+    document.body.addEventListener(ev, preventDefaults, false);
 });
-
-function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
-}
-
-// Highlight drop area when dragging over it
-['dragenter', 'dragover'].forEach(eventName => {
-    uploadArea.addEventListener(eventName, () => {
-        uploadArea.classList.add('drag-over');
-    }, false);
-});
-
-['dragleave', 'drop'].forEach(eventName => {
-    uploadArea.addEventListener(eventName, () => {
-        uploadArea.classList.remove('drag-over');
-    }, false);
-});
-
-// Handle dropped files
+function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+['dragenter', 'dragover'].forEach(ev => uploadArea.addEventListener(ev, () => uploadArea.classList.add('drag-over'), false));
+['dragleave', 'drop'].forEach(ev => uploadArea.addEventListener(ev, () => uploadArea.classList.remove('drag-over'), false));
 uploadArea.addEventListener('drop', (e) => {
-    const dt = e.dataTransfer;
-    const files = dt.files;
-    
+    const files = e.dataTransfer.files;
     if (files.length > 0) {
         const file = files[0];
-        if (file.type.startsWith('image/')) {
-            fileInput.files = files;
-            displayImagePreview(file);
-        } else {
-            alert('Please upload an image file (JPG, PNG, or WebP)');
-        }
+        if (file.type.startsWith('image/')) { fileInput.files = files; displayImagePreview(file); }
+        else alert('Please upload an image file (JPG, PNG, or WebP)');
     }
 });
-
-// Remove image
 removeImageBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    fileInput.value = '';
-    uploadPlaceholder.style.display = 'block';
-    imagePreview.style.display = 'none';
+    e.stopPropagation(); fileInput.value = '';
+    uploadPlaceholder.style.display = 'block'; imagePreview.style.display = 'none';
 });
-
-// Display image preview
 function displayImagePreview(file) {
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         document.getElementById('previewImg').src = e.target.result;
-        uploadPlaceholder.style.display = 'none';
-        imagePreview.style.display = 'block';
+        uploadPlaceholder.style.display = 'none'; imagePreview.style.display = 'block';
     };
     reader.readAsDataURL(file);
 }
 
-// Load and display blog posts in manage section with collapsible categories
 async function loadBlogPosts() {
     const blogList = document.getElementById('blogList');
-    
     try {
         const response = await fetch(`${API_URL}/api/posts`);
-        if (!response.ok) {
-            blogList.innerHTML = '<p style="text-align: center; color: #666;">Error loading posts.</p>';
-            return;
-        }
-        
+        if (!response.ok) { blogList.innerHTML = '<p class="muted-note">Error loading posts.</p>'; return; }
         const posts = await response.json();
-        
-        if (posts.length === 0) {
-            blogList.innerHTML = '<p style="text-align: center; color: #666;">No blog posts yet. Create your first post!</p>';
-            return;
-        }
-        
-        // Group posts by category
+        if (!posts.length) { blogList.innerHTML = '<p class="muted-note">No blog posts yet. Create your first post!</p>'; return; }
+
         const categories = {
             'corporate': { name: 'Corporate Law', posts: [] },
             'compliance': { name: 'Compliance', posts: [] },
             'insolvency': { name: 'Insolvency', posts: [] },
             'debt-recovery': { name: 'Debt Recovery', posts: [] }
         };
-        
-        posts.forEach(post => {
-            if (categories[post.category]) {
-                categories[post.category].posts.push(post);
-            }
-        });
-        
-        // Build HTML with collapsible sections
+        posts.forEach(post => { if (categories[post.category]) categories[post.category].posts.push(post); });
+
         let html = '';
         Object.keys(categories).forEach(catKey => {
             const cat = categories[catKey];
@@ -346,15 +349,12 @@ async function loadBlogPosts() {
                         </div>
                         <div id="category-${catKey}" class="category-posts">
                             ${cat.posts.map(post => `
-                                <div class="blog-item" style="margin-bottom: 15px;">
+                                <div class="blog-item" style="margin-bottom:15px;">
                                     <div class="blog-item-content">
-                                        ${post.coverImage ? `<img src="${post.coverImage}" alt="${post.title}" style="width: 100%; max-width: 200px; border-radius: 8px; margin-bottom: 10px;">` : ''}
-                                        <h3>${post.title}</h3>
-                                        <div class="blog-item-meta">
-                                            ${post.date} • ${post.read_time}
-                                            ${post.featured ? ' • <strong style="color: #c9a961;">FEATURED</strong>' : ''}
-                                        </div>
-                                        <p style="color: #666; margin-top: 10px;">${post.excerpt}</p>
+                                        ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" style="width:100%; max-width:200px; border-radius:8px; margin-bottom:10px;">` : ''}
+                                        <h3>${esc(post.title)}</h3>
+                                        <div class="blog-item-meta">${esc(post.date)} • ${esc(post.read_time || post.readTime || '')} ${post.featured ? '• <strong style="color:#ad8838;">FEATURED</strong>' : ''}</div>
+                                        <p style="color:#6b7488; margin-top:10px;">${esc(post.excerpt)}</p>
                                     </div>
                                     <div class="blog-item-actions">
                                         <button class="btn-small btn-delete" onclick="deletePostById(${post.id})">Delete</button>
@@ -362,165 +362,92 @@ async function loadBlogPosts() {
                                 </div>
                             `).join('')}
                         </div>
-                    </div>
-                `;
+                    </div>`;
             }
         });
-        
-        if (html === '') {
-            blogList.innerHTML = '<p style="text-align: center; color: #666;">No blog posts yet. Create your first post!</p>';
-        } else {
-            blogList.innerHTML = html;
-        }
+        blogList.innerHTML = html || '<p class="muted-note">No blog posts yet. Create your first post!</p>';
     } catch (error) {
-        console.error('Error loading posts:', error);
-        blogList.innerHTML = '<p style="text-align: center; color: #666;">Error loading posts.</p>';
+        blogList.innerHTML = '<p class="muted-note">Error loading posts.</p>';
     }
 }
-
-// Toggle category visibility
 function toggleCategory(categoryKey) {
-    const categoryPosts = document.getElementById(`category-${categoryKey}`);
-    categoryPosts.classList.toggle('active');
+    document.getElementById(`category-${categoryKey}`).classList.toggle('active');
 }
-
-// Delete post
 async function deletePostById(id) {
-    if (confirm('Are you sure you want to delete this post?')) {
-        try {
-            const response = await fetch(`${API_URL}/api/posts/${id}`, {
-                method: 'DELETE'
-            });
-            
-            if (response.ok) {
-                alert('Post deleted successfully!');
-                loadBlogPosts();
-            } else {
-                alert('Error deleting post. Please try again.');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Error connecting to server.');
-        }
-    }
+    if (!confirm('Are you sure you want to delete this post?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/posts/${id}`, { method: 'DELETE', headers: authHeaders() });
+        if (response.status === 401) return handleUnauthorized();
+        if (response.ok) { loadBlogPosts(); }
+        else alert('Error deleting post. Please try again.');
+    } catch (error) { alert('Error connecting to server.'); }
 }
 
-// Initialize
-checkAuth();
-
-// Load messages
+// ============================================================
+//  MESSAGES
+// ============================================================
 async function loadMessages() {
     const messagesList = document.getElementById('messagesList');
-    
     try {
-        const response = await fetch(`${API_URL}/api/messages`);
-        if (!response.ok) {
-            messagesList.innerHTML = '<p style="text-align: center; color: #666;">Error loading messages.</p>';
-            return;
-        }
-        
+        const response = await fetch(`${API_URL}/api/messages`, { headers: authHeaders() });
+        if (response.status === 401) return handleUnauthorized();
+        if (!response.ok) { messagesList.innerHTML = '<p class="muted-note">Error loading messages.</p>'; return; }
         const messages = await response.json();
-        
-        if (messages.length === 0) {
-            messagesList.innerHTML = `
-                <div class="no-messages">
-                    <div class="no-messages-icon">📭</div>
-                    <h3>No messages yet</h3>
-                    <p>Contact form submissions will appear here</p>
-                </div>
-            `;
+        if (!messages.length) {
+            messagesList.innerHTML = `<div class="no-messages"><div class="no-messages-icon">📭</div><h3>No messages yet</h3><p>Contact form submissions will appear here</p></div>`;
             return;
         }
-        
-        // Update unread badge
         const unreadCount = messages.filter(m => !m.read).length;
         const badge = document.getElementById('unreadBadge');
-        if (unreadCount > 0) {
-            badge.textContent = unreadCount;
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
-        }
-        
-        // Display messages
+        if (unreadCount > 0) { badge.textContent = unreadCount; badge.style.display = 'inline-block'; }
+        else badge.style.display = 'none';
+
         messagesList.innerHTML = messages.map(msg => `
             <div class="message-item ${msg.read ? '' : 'unread'}">
                 <div class="message-header">
                     <div class="message-info">
-                        <h3>${msg.name}</h3>
+                        <h3>${esc(msg.name)}</h3>
                         <div class="message-meta">
-                            <span>📧 ${msg.email}</span>
+                            <span>📧 ${esc(msg.email)}</span>
                             <span>📅 ${new Date(msg.date).toLocaleString()}</span>
-                            ${!msg.read ? '<span style="color: #ff9800; font-weight: 600;">● NEW</span>' : ''}
+                            ${!msg.read ? '<span style="color:#e0a800; font-weight:600;">● NEW</span>' : ''}
                         </div>
                     </div>
                 </div>
-                <div class="message-subject">
-                    Subject: ${msg.subject}
-                </div>
-                <div class="message-body">
-                    ${msg.message}
-                </div>
+                <div class="message-subject">Subject: ${esc(msg.subject)}</div>
+                <div class="message-body">${esc(msg.message)}</div>
                 <div class="message-actions">
-                    <a href="mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}" class="btn-small btn-reply">
-                        Reply via Email
-                    </a>
-                    <a href="https://wa.me/${msg.email.includes('+') ? msg.email.replace(/[^0-9]/g, '') : ''}" target="_blank" class="btn-small" style="background: #25D366; color: white;">
-                        WhatsApp
-                    </a>
+                    <a href="mailto:${esc(msg.email)}?subject=Re: ${encodeURIComponent(msg.subject)}" class="btn-small btn-reply">Reply via Email</a>
                     ${!msg.read ? `<button class="btn-small btn-mark-read" onclick="markAsRead(${msg.id})">Mark as Read</button>` : ''}
                     <button class="btn-small btn-delete" onclick="deleteMessage(${msg.id})">Delete</button>
                 </div>
             </div>
         `).join('');
     } catch (error) {
-        console.error('Error loading messages:', error);
-        messagesList.innerHTML = '<p style="text-align: center; color: #666;">Error loading messages.</p>';
+        messagesList.innerHTML = '<p class="muted-note">Error loading messages.</p>';
     }
 }
-
-// Mark message as read
 async function markAsRead(id) {
     try {
-        const response = await fetch(`${API_URL}/api/messages/${id}/read`, {
-            method: 'PATCH'
-        });
-        
-        if (response.ok) {
-            loadMessages();
-        } else {
-            alert('Error marking message as read.');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error connecting to server.');
-    }
+        const response = await fetch(`${API_URL}/api/messages/${id}/read`, { method: 'PATCH', headers: authHeaders() });
+        if (response.status === 401) return handleUnauthorized();
+        if (response.ok) loadMessages(); else alert('Error marking message as read.');
+    } catch (error) { alert('Error connecting to server.'); }
 }
-
-// Delete message
 async function deleteMessage(id) {
-    if (confirm('Are you sure you want to delete this message?')) {
-        try {
-            const response = await fetch(`${API_URL}/api/messages/${id}`, {
-                method: 'DELETE'
-            });
-            
-            if (response.ok) {
-                loadMessages();
-            } else {
-                alert('Error deleting message.');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Error connecting to server.');
-        }
-    }
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    try {
+        const response = await fetch(`${API_URL}/api/messages/${id}`, { method: 'DELETE', headers: authHeaders() });
+        if (response.status === 401) return handleUnauthorized();
+        if (response.ok) loadMessages(); else alert('Error deleting message.');
+    } catch (error) { alert('Error connecting to server.'); }
 }
 
-// Auto-refresh messages every 30 seconds when on messages tab
+// Auto-refresh messages every 30s when on that tab
 setInterval(() => {
     const messagesTab = document.getElementById('messages');
-    if (messagesTab && messagesTab.classList.contains('active')) {
-        loadMessages();
-    }
+    if (messagesTab && messagesTab.classList.contains('active')) loadMessages();
 }, 30000);
+
+// Init
+checkAuth();

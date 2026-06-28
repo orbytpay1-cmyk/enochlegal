@@ -26,23 +26,7 @@ function typeSubtitle() {
     }
 }
 
-// Mobile Navigation
-const hamburger = document.querySelector('.hamburger');
-const navMenu = document.querySelector('.nav-menu');
-
-if (hamburger && navMenu) {
-    hamburger.addEventListener('click', function() {
-        navMenu.classList.toggle('active');
-    });
-
-    // Close menu when clicking links
-    const navLinks = document.querySelectorAll('.nav-menu a');
-    navLinks.forEach(function(link) {
-        link.addEventListener('click', function() {
-            navMenu.classList.remove('active');
-        });
-    });
-}
+// Mobile navigation is handled centrally in enhance.js (single owner across all pages)
 
 // Smooth Scrolling
 const anchorLinks = document.querySelectorAll('a[href^="#"]');
@@ -278,7 +262,7 @@ if (contactForm) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
             
-            const response = await fetch('https://enochlegal-production.up.railway.app/api/contact', {
+            const response = await fetch('/api/contact', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

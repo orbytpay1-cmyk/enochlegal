@@ -3,47 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enoch & Enoch Legal - Corporate & Compliance Law Firm</title>
-    <meta name="description" content="Enoch & Enoch Legal is a corporate and compliance law firm in Lagos, Nigeria, led by Precious C. Enoch, Esq. We advise businesses on corporate law, regulatory compliance, debt recovery, and insolvency with practical, commercially sound solutions.">
-    <meta name="keywords" content="corporate law firm Lagos, compliance law Nigeria, debt recovery lawyer, insolvency lawyer, regulatory compliance, commercial law, Enoch & Enoch Legal, Precious Enoch Esq">
+    <title>Practice Areas - Enoch & Enoch Legal</title>
+    <meta name="description" content="Practice areas at Enoch & Enoch Legal: debt recovery, corporate law, compliance & regulatory law, and insolvency & restructuring for businesses in Nigeria.">
+    <meta name="keywords" content="debt recovery Nigeria, corporate law, compliance regulatory law, insolvency restructuring, commercial law firm Lagos, Enoch & Enoch Legal practice areas">
     <meta name="author" content="Precious C. Enoch, Esq.">
     <meta name="robots" content="index, follow">
     <meta name="theme-color" content="#15294f">
-    <link rel="canonical" href="https://enochlegal.com/">
-    <!-- Open Graph / Facebook / LinkedIn -->
+    <link rel="canonical" href="https://enochlegal.com/practice">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Enoch & Enoch Legal">
-    <meta property="og:title" content="Enoch & Enoch Legal — Corporate & Compliance Law Firm">
-    <meta property="og:description" content="A corporate and compliance law firm in Lagos, Nigeria, led by Precious C. Enoch, Esq. — corporate law, regulatory compliance, debt recovery, and insolvency.">
-    <meta property="og:url" content="https://enochlegal.com/">
+    <meta property="og:title" content="Practice Areas — Enoch & Enoch Legal">
+    <meta property="og:description" content="Debt recovery, corporate law, compliance & regulatory law, and insolvency & restructuring.">
+    <meta property="og:url" content="https://enochlegal.com/practice">
     <meta property="og:image" content="precious-enoch-2.jpg">
-    <meta property="og:image:alt" content="Precious C. Enoch, Esq., Principal Partner at Enoch & Enoch Legal">
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Enoch & Enoch Legal — Corporate & Compliance Law Firm">
-    <meta name="twitter:description" content="Corporate & compliance law in Lagos, Nigeria — corporate advisory, compliance, debt recovery, and insolvency.">
+    <meta name="twitter:title" content="Practice Areas — Enoch & Enoch Legal">
+    <meta name="twitter:description" content="Corporate advisory, compliance, debt recovery, and insolvency.">
     <meta name="twitter:image" content="precious-enoch-2.jpg">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="icon" type="image/jpeg" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
     <link rel="apple-touch-icon" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
     <script src="seo.js"></script>
+    <script>
+      // Service catalogue structured data
+      (function () {
+        var base = location.origin, s = document.createElement('script');
+        s.type = 'application/ld+json';
+        s.textContent = JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "LegalService",
+          "name": "Enoch & Enoch Legal",
+          "url": base + "/",
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Practice Areas",
+            "itemListElement": [
+              { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Debt Recovery" } },
+              { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Corporate Law" } },
+              { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Compliance & Regulatory Law" } },
+              { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Insolvency & Restructuring" } }
+            ]
+          }
+        });
+        document.head.appendChild(s);
+      })();
+    </script>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Welcome Screen -->
-    <div id="welcomeScreen" class="welcome-screen" aria-hidden="true">
-        <div class="welcome-inner">
-            <div class="welcome-mark">E&amp;E</div>
-            <div class="welcome-name">Enoch &amp; Enoch Legal</div>
-            <div class="welcome-rule"></div>
-            <div class="welcome-tag">Corporate Law and Compliance</div>
-            <button class="welcome-enter" type="button">Enter</button>
-        </div>
-    </div>
-
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
@@ -52,77 +62,28 @@
                 <span class="brand-text">Enoch & Enoch Legal</span>
             </a>
             <ul class="nav-menu">
-                <li><a href="/" class="active">Home</a></li>
+                <li><a href="/">Home</a></li>
                 <li><a href="/about">About</a></li>
-                <li><a href="/practice">Practice Areas</a></li>
+                <li><a href="/practice" class="active">Practice Areas</a></li>
                 <li><a href="/blog.html">Blog</a></li>
                 <li><a href="/contact">Contact</a></li>
             </ul>
-            <div class="hamburger">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
+            <div class="hamburger"><span></span><span></span><span></span></div>
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section id="home" class="hero">
+    <!-- Page Hero -->
+    <section class="page-hero">
         <div class="container">
-            <div class="hero-content">
-                <h1 id="typewriter-title"></h1>
-                <p id="typewriter-subtitle"></p>
-                <div class="hero-buttons">
-                    <a href="/contact" class="btn btn-primary">Get Started</a>
-                    <a href="/about" class="btn btn-secondary">Learn More</a>
-                </div>
-            </div>
+            <span class="page-hero-eyebrow">What We Do</span>
+            <h1>Practice Areas</h1>
+            <p>Focused expertise across corporate advisory, compliance, recovery, and restructuring</p>
         </div>
     </section>
 
-    <!-- About Teaser -->
-    <section id="about" class="about">
+    <!-- Practice Areas -->
+    <section class="practice practice-page">
         <div class="container">
-            <div class="section-header">
-                <h2>About Us</h2>
-                <div class="divider"></div>
-            </div>
-            <div class="about-content">
-                <div class="about-image">
-                    <img src="precious-enoch-2.jpg" alt="Precious C. Enoch, Esq. - Principal Partner at Enoch & Enoch Legal" width="700" height="900">
-                    <div class="about-image-caption">
-                        <strong>Precious C. Enoch, Esq.</strong>
-                        <span>Principal Partner</span>
-                    </div>
-                </div>
-                <div class="about-text">
-                    <p>Enoch and Enoch Legal is a dynamic corporate and compliance law firm established in 2024 with a vision to provide high-quality legal services tailored for businesses navigating today's complex legal and regulatory environment.</p>
-                    <p>Though a young firm, we are committed to excellence, integrity, and client-centric solutions. Our legal practice focuses on corporate advisory, regulatory compliance, commercial transactions, and insolvency practice.</p>
-                    <p>We pride ourselves on building long-term, trusted relationships with our clients through practical legal advice, proactive risk mitigation, and strategic legal support.</p>
-                    <div class="about-info">
-                        <div class="info-card">
-                            <h3>Founded</h3>
-                            <p>2024</p>
-                        </div>
-                        <div class="info-card">
-                            <h3>Location</h3>
-                            <p>Lagos, Nigeria</p>
-                        </div>
-                    </div>
-                    <a href="/about" class="text-link">Learn more about the firm →</a>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Practice Areas Teaser -->
-    <section id="practice" class="practice">
-        <div class="container">
-            <div class="section-header">
-                <h2>Practice Areas</h2>
-                <div class="divider"></div>
-                <p>Focused expertise across corporate advisory, compliance, recovery, and restructuring</p>
-            </div>
             <div class="practice-grid">
                 <div class="practice-card active">
                     <div class="practice-icon">
@@ -184,30 +145,6 @@
                     </ul>
                 </div>
             </div>
-            <div class="blog-cta">
-                <a href="/practice" class="btn btn-primary">View All Practice Areas</a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Blog / Insights Teaser -->
-    <section id="blog" class="blog">
-        <div class="container">
-            <div class="section-header">
-                <h2>Legal Insights by Precious C. Enoch, Esq.</h2>
-                <div class="divider"></div>
-                <p>Thought leadership on corporate law, compliance, and business strategy</p>
-            </div>
-
-            <div class="blog-preview-grid" id="blogPreviewGrid">
-                <div style="text-align: center; padding: 40px; color: #666;">
-                    <p>Loading articles...</p>
-                </div>
-            </div>
-
-            <div class="blog-cta">
-                <a href="/blog.html" class="btn btn-primary">View All Articles</a>
-            </div>
         </div>
     </section>
 
@@ -215,7 +152,7 @@
     <section class="home-cta">
         <div class="container">
             <div class="home-cta-inner">
-                <h2>Get In Touch</h2>
+                <h2>Need Legal Support?</h2>
                 <p>Let's discuss how we can support your business</p>
                 <div class="hero-buttons">
                     <a href="/contact" class="btn btn-primary">Contact Us</a>
@@ -267,10 +204,7 @@
         </div>
     </footer>
 
-    <script src="blog-data.js"></script>
-    <script src="script.js"></script>
     <script src="enhance.js"></script>
     <script src="analytics.js" defer></script>
-    <script src="welcome.js"></script>
 </body>
 </html>

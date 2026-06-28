@@ -4,7 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blog Post - Enoch & Enoch Legal</title>
+    <meta name="description" content="Legal insight from Enoch & Enoch Legal — corporate law, compliance, debt recovery, and insolvency by Precious C. Enoch, Esq.">
+    <meta name="author" content="Precious C. Enoch, Esq.">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#15294f">
+    <link rel="canonical" href="">
+    <!-- Open Graph (filled in dynamically per article) -->
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="Enoch & Enoch Legal">
+    <meta property="og:title" content="Enoch & Enoch Legal">
+    <meta property="og:description" content="Legal insight from Enoch & Enoch Legal.">
+    <meta property="og:url" content="">
+    <meta property="og:image" content="precious-enoch-2.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Enoch & Enoch Legal">
+    <meta name="twitter:description" content="Legal insight from Enoch & Enoch Legal.">
+    <meta name="twitter:image" content="precious-enoch-2.jpg">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="icon" type="image/jpeg" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
+    <link rel="apple-touch-icon" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
+    <script src="seo.js"></script>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,16 +33,16 @@
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
-            <a href="index.html" class="nav-brand" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 10px;">
-                <img src="WhatsApp Image 2026-02-20 at 16.23.00.jpeg" alt="Enoch & Enoch Legal" class="nav-logo">
+            <a href="/" class="nav-brand" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 10px;">
+                <img src="WhatsApp Image 2026-02-20 at 16.23.00.jpeg" alt="Enoch & Enoch Legal logo" class="nav-logo">
                 <span class="brand-text">Enoch & Enoch Legal</span>
             </a>
             <ul class="nav-menu">
-                <li><a href="index.html#home">Home</a></li>
-                <li><a href="index.html#about">About</a></li>
-                <li><a href="index.html#practice">Practice Areas</a></li>
-                <li><a href="blog.html">Blog</a></li>
-                <li><a href="index.html#contact">Contact</a></li>
+                <li><a href="/">Home</a></li>
+                <li><a href="/about">About</a></li>
+                <li><a href="/practice">Practice Areas</a></li>
+                <li><a href="/blog.html" class="active">Blog</a></li>
+                <li><a href="/contact">Contact</a></li>
             </ul>
             <div class="hamburger">
                 <span></span>
@@ -48,17 +67,34 @@
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
-                <div class="footer-section">
+                <div class="footer-section footer-brand">
                     <h3>Enoch & Enoch Legal</h3>
-                    <p>Excellence in Corporate & Compliance Law</p>
+                    <p>Corporate Law And Compliance</p>
                 </div>
                 <div class="footer-section">
                     <h4>Quick Links</h4>
                     <ul>
-                        <li><a href="index.html#about">About</a></li>
-                        <li><a href="index.html#practice">Practice Areas</a></li>
-                        <li><a href="blog.html">Blog</a></li>
-                        <li><a href="index.html#contact">Contact</a></li>
+                        <li><a href="/about">About</a></li>
+                        <li><a href="/practice">Practice Areas</a></li>
+                        <li><a href="/blog.html">Blog</a></li>
+                        <li><a href="/contact">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Practice Areas</h4>
+                    <ul>
+                        <li><a href="/practice">Debt Recovery</a></li>
+                        <li><a href="/practice">Corporate Law</a></li>
+                        <li><a href="/practice">Compliance & Regulatory Law</a></li>
+                        <li><a href="/practice">Insolvency & Restructuring</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <ul class="footer-contact">
+                        <li>Lagos, Nigeria</li>
+                        <li><a href="mailto:info@enochlegal.com">info@enochlegal.com</a></li>
+                        <li><a href="https://wa.me/2348131539182" target="_blank" rel="noopener">+234 813 153 9182</a></li>
                     </ul>
                 </div>
             </div>
@@ -75,14 +111,43 @@
         const urlParams = new URLSearchParams(window.location.search);
         const postId = urlParams.get('id');
 
-        // Mobile Navigation
-        const hamburger = document.querySelector('.hamburger');
-        const navMenu = document.querySelector('.nav-menu');
+        // Mobile navigation is handled centrally in enhance.js
 
-        if (hamburger) {
-            hamburger.addEventListener('click', function() {
-                navMenu.classList.toggle('active');
+        // Fill in SEO for the loaded article (description, social tags, BlogPosting schema)
+        function applyPostSeo(post) {
+            const base = location.origin;
+            const url = base + location.pathname + location.search;
+            const desc = (post.excerpt || '').slice(0, 200);
+            const img = post.coverImage || (base + '/precious-enoch-2.jpg');
+
+            const setMeta = (sel, val) => { const el = document.head.querySelector(sel); if (el) el.setAttribute('content', val); };
+            setMeta('meta[name="description"]', desc);
+            setMeta('meta[property="og:title"]', post.title);
+            setMeta('meta[property="og:description"]', desc);
+            setMeta('meta[property="og:url"]', url);
+            setMeta('meta[property="og:image"]', img);
+            setMeta('meta[name="twitter:title"]', post.title);
+            setMeta('meta[name="twitter:description"]', desc);
+            setMeta('meta[name="twitter:image"]', img);
+            const can = document.head.querySelector('link[rel="canonical"]'); if (can) can.href = url;
+
+            const ld = document.createElement('script');
+            ld.type = 'application/ld+json';
+            ld.textContent = JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "BlogPosting",
+                "headline": post.title,
+                "description": desc,
+                "image": img,
+                "datePublished": post.created_at || post.date,
+                "dateModified": post.created_at || post.date,
+                "url": url,
+                "mainEntityOfPage": { "@type": "WebPage", "@id": url },
+                "articleSection": post.category,
+                "author": { "@type": "Person", "name": post.author || "Precious C. Enoch, Esq." },
+                "publisher": { "@type": "Organization", "name": "Enoch & Enoch Legal", "logo": { "@type": "ImageObject", "url": base + "/favicon.svg" } }
             });
+            document.head.appendChild(ld);
         }
 
         // Load and display post
@@ -99,7 +164,7 @@
             }
 
             try {
-                const API_URL = 'https://enochlegal-production.up.railway.app';
+                const API_URL = '';
                 const response = await fetch(`${API_URL}/api/posts/${postId}`);
                 
                 if (!response.ok) {
@@ -107,10 +172,13 @@
                 }
 
                 const post = await response.json();
-                
+
                 // Update page title
                 document.title = post.title + ' - Enoch & Enoch Legal';
-                
+
+                // Per-article SEO: meta description, social tags, and BlogPosting schema
+                applyPostSeo(post);
+
                 // Display post
                 document.getElementById('postContent').innerHTML = `
                     <div class="blog-post-header">
@@ -147,5 +215,7 @@
         // Load post when page loads
         loadPost();
     </script>
+    <script src="enhance.js"></script>
+    <script src="analytics.js" defer></script>
 </body>
 </html>

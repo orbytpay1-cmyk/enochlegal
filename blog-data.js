@@ -1,8 +1,9 @@
 // Blog posts data - loads from backend API
 var allBlogPosts = [];
 
-// API base URL - always use Railway backend
-const API_URL = 'https://enochlegal-production.up.railway.app';
+// API base URL - same-origin so it works on any host (Railway, custom domain, localhost)
+// without re-deploying. The Express server serves both the site and the /api routes.
+const API_URL = '';
 
 // Load posts from backend
 async function loadBlogPosts() {
@@ -55,14 +56,14 @@ async function deletePost(postId) {
 }
 
 // Login
-async function adminLogin(username, password) {
+async function adminLogin(password) {
     try {
         const response = await fetch(`${API_URL}/api/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ password })
         });
         
         if (response.ok) {

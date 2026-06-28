@@ -86,7 +86,7 @@
 ## Troubleshooting
 
 **Can't login?**
-- Double-check username and password (case-sensitive)
+- Double-check the access code (450 digits, exact match required)
 - Clear browser cache and try again
 
 **Post not appearing?**

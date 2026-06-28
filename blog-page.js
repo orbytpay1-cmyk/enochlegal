@@ -1,21 +1,4 @@
-// Mobile Navigation Toggle
-const hamburger = document.querySelector('.hamburger');
-const navMenu = document.querySelector('.nav-menu');
-
-if (hamburger) {
-    hamburger.addEventListener('click', () => {
-        navMenu.classList.toggle('active');
-        hamburger.classList.toggle('active');
-    });
-}
-
-// Close mobile menu when clicking on a link
-document.querySelectorAll('.nav-menu a').forEach(link => {
-    link.addEventListener('click', () => {
-        navMenu.classList.remove('active');
-        if (hamburger) hamburger.classList.remove('active');
-    });
-});
+// Mobile navigation is handled centrally in enhance.js (single owner across all pages)
 
 // Load all blog posts from API
 async function loadAllBlogPosts(filter = 'all') {
