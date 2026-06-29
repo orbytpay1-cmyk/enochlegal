@@ -24,7 +24,8 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="icon" type="image/jpeg" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
     <link rel="apple-touch-icon" href="WhatsApp Image 2026-02-20 at 16.23.00.jpeg">
-    <script src="seo.js"></script>
+    <script src="/eel-config.js"></script>
+    <script src="seo.js?v=2"></script>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -106,7 +107,7 @@
         </div>
     </footer>
 
-    <script src="blog-data.js"></script>
+    <script src="blog-data.js?v=3"></script>
     <script>
         // Get post ID from URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -119,7 +120,7 @@
             const base = location.origin;
             const url = base + location.pathname + location.search;
             const desc = (post.excerpt || '').slice(0, 200);
-            const img = post.coverImage || (base + '/precious-enoch-2.jpg');
+            const img = (post.coverImage ? (window.EEL ? EEL.img(post.coverImage) : post.coverImage) : (base + '/precious-enoch-2.jpg'));
 
             const setMeta = (sel, val) => { const el = document.head.querySelector(sel); if (el) el.setAttribute('content', val); };
             setMeta('meta[name="description"]', desc);
@@ -133,6 +134,25 @@
             setMeta('meta[name="twitter:image"]', img);
             setMeta('meta[name="twitter:image:alt"]', post.title);
             const can = document.head.querySelector('link[rel="canonical"]'); if (can) can.href = url;
+
+            // Article-specific Open Graph + keywords (added if missing)
+            const addMeta = (attr, key, val) => {
+                if (!val) return;
+                let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+                if (!el) { el = document.createElement('meta'); el.setAttribute(attr, key); document.head.appendChild(el); }
+                el.setAttribute('content', val);
+            };
+            const published = post.created_at || post.publishAt || post.date || '';
+            addMeta('property', 'article:published_time', published);
+            addMeta('property', 'article:modified_time', post.updated_at || published);
+            addMeta('property', 'article:author', post.author || 'Precious C. Enoch, Esq.');
+            addMeta('property', 'article:section', post.category || 'Legal Insights');
+            addMeta('property', 'article:tag', post.category || 'law');
+            addMeta('name', 'keywords', [post.category, 'Enoch & Enoch Legal', 'legal insight', 'Nigeria law', post.title].filter(Boolean).join(', '));
+            addMeta('name', 'twitter:label1', 'Written by');
+            addMeta('name', 'twitter:data1', post.author || 'Precious C. Enoch, Esq.');
+            addMeta('name', 'twitter:label2', 'Reading time');
+            addMeta('name', 'twitter:data2', post.read_time || post.readTime || '5 min read');
 
             const ld = document.createElement('script');
             ld.type = 'application/ld+json';
@@ -175,7 +195,7 @@
             }
 
             try {
-                const API_URL = '';
+                const API_URL = (window.EEL_API_BASE || '');
                 const response = await fetch(`${API_URL}/api/posts/${postId}`);
                 
                 if (!response.ok) {
@@ -193,7 +213,7 @@
                 // Display post
                 document.getElementById('postContent').innerHTML = `
                     <div class="blog-post-header">
-                        ${post.coverImage ? `<img src="${post.coverImage}" alt="${post.title}" class="blog-post-cover-image">` : ''}
+                        ${post.coverImage ? `<img src="${(window.EEL ? EEL.img(post.coverImage) : post.coverImage)}" alt="${post.title}" class="blog-post-cover-image" onerror="this.onerror=null;this.style.display='none'">` : ''}
                         <div class="blog-post-meta">
                             <span>📅 ${post.date}</span>
                             <span>✍️ ${post.author}</span>
@@ -226,7 +246,7 @@
         // Load post when page loads
         loadPost();
     </script>
-    <script src="enhance.js"></script>
-    <script src="analytics.js?v=3" defer></script>
+    <script src="enhance.js?v=2"></script>
+    <script src="analytics.js?v=4" defer></script>
 </body>
 </html>

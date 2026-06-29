@@ -15,12 +15,25 @@ function cloudinaryConfigured() {
     return !!(name && key && secret && name !== 'demo' && key !== 'demo' && secret !== 'demo');
 }
 
-function saveUploadLocally(file, rootDir, siteBase) {
-    const ext = (path.extname(file.originalname || '') || '.jpg').toLowerCase().slice(0, 8);
-    const safeExt = /^\.(jpe?g|png|gif|webp)$/i.test(ext) ? ext : '.jpg';
-    const name = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${safeExt}`;
-    fs.writeFileSync(path.join(uploadsDir(rootDir), name), file.buffer);
-    return `${siteBase}/uploads/${name}`;
+// Pick a safe image extension from the original filename or mime type.
+function extFor(originalname, mimetype) {
+    const ext = (path.extname(originalname || '') || '').toLowerCase().slice(0, 8);
+    if (/^\.(jpe?g|png|gif|webp)$/i.test(ext)) return ext;
+    const map = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp' };
+    return map[(mimetype || '').toLowerCase()] || '.jpg';
 }
 
-module.exports = { uploadsDir, cloudinaryConfigured, saveUploadLocally };
+// Make a unique, URL-safe filename for an uploaded image.
+function uploadName(originalname, mimetype) {
+    return `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${extFor(originalname, mimetype)}`;
+}
+
+// Disk fallback. Returns a RELATIVE url (/uploads/<name>) so it stays valid on any
+// host/domain. NOTE: Railway's disk is ephemeral — prefer Cloudinary or MongoDB storage.
+function saveUploadLocally(file, rootDir) {
+    const name = uploadName(file.originalname, file.mimetype);
+    fs.writeFileSync(path.join(uploadsDir(rootDir), name), file.buffer);
+    return `/uploads/${name}`;
+}
+
+module.exports = { uploadsDir, cloudinaryConfigured, saveUploadLocally, extFor, uploadName };

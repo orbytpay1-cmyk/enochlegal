@@ -75,7 +75,7 @@ No code changes needed — URLs are host-aware.
 
 ## Admin access on the live site
 
-1. Tap/click anywhere on the site **10 times quickly**
+1. Tap/click anywhere on the site **20 times quickly**
 2. Enter the access code in the gate that appears
 3. Full dashboard opens at `/admin`
 

@@ -84,10 +84,22 @@ function buildPostFields(body, existing) {
     };
 }
 
+// Convert a host-baked cover URL (e.g. http://old-host/uploads/x.jpg, saved by an
+// older build) into a relative /uploads/x.jpg so it resolves on any domain and can
+// be proxied/served by the current backend. Cloudinary / external URLs are left as-is.
+function relativizeCover(post) {
+    if (post && typeof post.coverImage === 'string') {
+        const m = post.coverImage.match(/^https?:\/\/[^/]+(\/uploads\/.+)$/i);
+        if (m) post.coverImage = m[1];
+    }
+    return post;
+}
+
 module.exports = {
     formatDisplayDate,
     parseDateInput,
     postIsPublic,
     publicPostsFilter,
-    buildPostFields
+    buildPostFields,
+    relativizeCover
 };

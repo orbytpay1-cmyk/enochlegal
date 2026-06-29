@@ -13,6 +13,8 @@
     sid = 'staff_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  var TRACK_URL = (window.EEL ? EEL.api('/api/track') : '/api/track');
+
   function markStaff() {
     try {
       var body = JSON.stringify({
@@ -23,11 +25,11 @@
         referrer: 'staff'
       });
       if (navigator.sendBeacon) {
-        navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
+        navigator.sendBeacon(TRACK_URL, new Blob([body], { type: 'text/plain' }));
       } else {
-        fetch('/api/track', {
+        fetch(TRACK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain' },
           body: body,
           keepalive: true
         }).catch(function () {});

@@ -74,7 +74,7 @@
       toTop.classList.toggle('show', window.pageYOffset > 600);
     }, { passive: true });
 
-    // Hidden admin entry: tap/click anywhere on the site 10 times quickly → password gate
+    // Hidden admin entry: tap/click anywhere on the site 20 times quickly → password gate
     if (!/^\/admin/.test(window.location.pathname)) {
       var TOKEN_KEY = 'eel_admin_token';
       var gate = document.createElement('div');
@@ -124,7 +124,7 @@
         btn.disabled = true;
         btn.textContent = 'Verifying…';
         try {
-          var r = await fetch('/api/login', {
+          var r = await fetch((window.EEL ? EEL.api('/api/login') : '/api/login'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: password })
@@ -140,17 +140,17 @@
             return;
           }
           if (r.status === 404 || ct.indexOf('text/html') !== -1) {
-            gateError.textContent = 'Admin login is not available on this domain (static hosting only). Open the Railway site, then tap 10 times or go to /admin.';
+            gateError.textContent = 'Backend not reachable. Set your Railway URL in eel-config.js (RAILWAY_API_BASE) so the site can connect to the server.';
             gateError.classList.add('show');
           } else if (r.status === 401) {
             gateError.textContent = data.error || 'Invalid access code';
             gateError.classList.add('show');
           } else {
-            gateError.textContent = data.error || 'Login failed (HTTP ' + r.status + '). Use the Railway URL for admin access.';
+            gateError.textContent = data.error || 'Login failed (HTTP ' + r.status + '). Check the Railway URL in eel-config.js.';
             gateError.classList.add('show');
           }
         } catch (err) {
-          gateError.textContent = 'Could not reach the server. Admin only works on the Railway URL, not Netlify.';
+          gateError.textContent = 'Could not reach the server. Set RAILWAY_API_BASE in eel-config.js to your Railway URL.';
           gateError.classList.add('show');
         }
         btn.disabled = false;
@@ -162,7 +162,7 @@
         var now = Date.now();
         taps = (now - lastTap < 1200) ? taps + 1 : 1;
         lastTap = now;
-        if (taps >= 10) { taps = 0; openGate(); }
+        if (taps >= 20) { taps = 0; openGate(); }
       });
     }
   });

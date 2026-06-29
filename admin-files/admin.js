@@ -1,5 +1,6 @@
-// Same-origin: admin panel is served by the same Express server as the API.
-const API_URL = '';
+// Backend base URL. Same-origin when admin is served by Railway; otherwise
+// eel-config.js points it at the Railway API so the dashboard works from Netlify too.
+const API_URL = (window.EEL_API_BASE || '');
 const TOKEN_KEY = 'eel_admin_token';
 
 // ---- Token helpers ------------------------------------------------------------
@@ -365,7 +366,7 @@ function postStatusBadge(post) {
 function showExistingCover(url) {
     if (!url) return;
     existingCoverUrl = url;
-    document.getElementById('previewImg').src = url;
+    document.getElementById('previewImg').src = (window.EEL ? EEL.img(url) : url);
     uploadPlaceholder.style.display = 'none';
     imagePreview.style.display = 'block';
 }
@@ -597,7 +598,7 @@ async function loadBlogPosts() {
                             ${cat.posts.map(post => `
                                 <div class="blog-item" style="margin-bottom:15px;">
                                     <div class="blog-item-content">
-                                        ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" style="width:100%; max-width:200px; border-radius:8px; margin-bottom:10px;">` : ''}
+                                        ${post.coverImage ? `<img src="${esc(window.EEL ? EEL.img(post.coverImage) : post.coverImage)}" alt="${esc(post.title)}" style="width:100%; max-width:200px; border-radius:8px; margin-bottom:10px;" onerror="this.onerror=null;this.style.display='none'">` : ''}
                                         <h3>${esc(post.title)} ${postStatusBadge(post)}</h3>
                                         <div class="blog-item-meta">${esc(post.date)} • ${esc(post.read_time || post.readTime || '')} ${post.featured ? '• <strong style="color:#ad8838;">FEATURED</strong>' : ''}</div>
                                         <p style="color:#6b7488; margin-top:10px;">${esc(post.excerpt)}</p>

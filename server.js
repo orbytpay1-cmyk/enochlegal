@@ -8,9 +8,9 @@ const cloudinary = require('cloudinary').v2;
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const crypto = require('crypto');
-const { uploadsDir, cloudinaryConfigured, saveUploadLocally } = require('./upload-images');
+const { uploadsDir, cloudinaryConfigured, saveUploadLocally, uploadName } = require('./upload-images');
 const { registerSeoRoutes } = require('./seo-routes');
-const { publicPostsFilter, buildPostFields, postIsPublic } = require('./post-helpers');
+const { publicPostsFilter, buildPostFields, postIsPublic, relativizeCover } = require('./post-helpers');
 
 const UPLOADS_DIR = uploadsDir(__dirname);
 
@@ -89,11 +89,15 @@ let db;
 let postsCollection;
 let messagesCollection;
 let visitsCollection;
+let imagesCollection;
 let isConnected = false;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
+// Analytics beacons (navigator.sendBeacon) are sent as text/plain so they work
+// cross-origin from Netlify WITHOUT a CORS preflight. Parse those bodies too.
+app.use(bodyParser.text({ type: ['text/plain'], limit: '1mb' }));
 
 // Health check endpoint (always works)
 app.get('/health', (req, res) => {
@@ -183,7 +187,7 @@ app.get('/api/posts', async (req, res) => {
             return res.status(503).json({ error: 'Database not connected' });
         }
         const posts = await postsCollection.find(publicPostsFilter()).sort({ id: -1 }).toArray();
-        res.json(posts.filter(p => postIsPublic(p)));
+        res.json(posts.filter(p => postIsPublic(p)).map(relativizeCover));
     } catch (error) {
         console.error('Error fetching posts:', error);
         res.status(500).json({ error: 'Failed to fetch posts', details: error.message });
@@ -198,7 +202,7 @@ app.get('/api/posts/:id', async (req, res) => {
         }
         const post = await postsCollection.findOne({ id: parseInt(req.params.id) });
         if (post && postIsPublic(post)) {
-            res.json(post);
+            res.json(relativizeCover(post));
         } else {
             res.status(404).json({ error: 'Post not found' });
         }
@@ -215,7 +219,7 @@ app.get('/api/admin/posts', requireAuth, async (req, res) => {
             return res.status(503).json({ error: 'Database not connected' });
         }
         const posts = await postsCollection.find().sort({ id: -1 }).toArray();
-        res.json(posts);
+        res.json(posts.map(relativizeCover));
     } catch (error) {
         console.error('Error fetching admin posts:', error);
         res.status(500).json({ error: 'Failed to fetch posts', details: error.message });
@@ -229,7 +233,7 @@ app.get('/api/admin/posts/:id', requireAuth, async (req, res) => {
             return res.status(503).json({ error: 'Database not connected' });
         }
         const post = await postsCollection.findOne({ id: parseInt(req.params.id) });
-        if (post) res.json(post);
+        if (post) res.json(relativizeCover(post));
         else res.status(404).json({ error: 'Post not found' });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch post', details: error.message });
@@ -243,6 +247,7 @@ app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, r
             return res.status(400).json({ error: 'No image file provided' });
         }
 
+        // 1) Cloudinary CDN when credentials are configured (best for SEO + permanence).
         if (cloudinaryConfigured()) {
             const b64 = Buffer.from(req.file.buffer).toString('base64');
             const dataURI = `data:${req.file.mimetype};base64,${b64}`;
@@ -258,9 +263,26 @@ app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, r
             });
         }
 
-        // Fallback: store on server (works immediately; add Cloudinary env vars for permanent CDN hosting)
-        const url = saveUploadLocally(req.file, __dirname, siteBase(req));
-        console.log('📸 Image saved locally:', url);
+        // 2) No Cloudinary → store the image bytes in MongoDB so they SURVIVE Railway
+        //    redeploys (the container disk is wiped on every deploy). Served from
+        //    /uploads/:name below. Returns a relative URL so it works on any domain.
+        if (isConnected && imagesCollection) {
+            const name = uploadName(req.file.originalname, req.file.mimetype);
+            await imagesCollection.insertOne({
+                name,
+                contentType: req.file.mimetype || 'image/jpeg',
+                data: req.file.buffer,
+                size: req.file.size || (req.file.buffer ? req.file.buffer.length : 0),
+                createdAt: new Date()
+            });
+            const url = `/uploads/${name}`;
+            console.log('🖼️  Image stored in MongoDB:', url);
+            return res.json({ success: true, url, storage: 'mongodb' });
+        }
+
+        // 3) Last resort: ephemeral server disk (works now, but lost on redeploy).
+        const url = saveUploadLocally(req.file, __dirname);
+        console.log('📸 Image saved to local disk (ephemeral):', url);
         res.json({ success: true, url, storage: 'local' });
     } catch (error) {
         console.error('Error uploading image:', error);
@@ -600,7 +622,9 @@ function publicVisitorQuery() {
 app.post('/api/track', async (req, res) => {
     try {
         if (!isConnected || !visitsCollection) return res.json({ ok: false });
-        const { sessionId, path: p, event, referrer, title } = req.body || {};
+        let payload = req.body;
+        if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch (e) { payload = {}; } }
+        const { sessionId, path: p, event, referrer, title } = payload || {};
         if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 80) {
             return res.status(400).json({ error: 'bad session' });
         }
@@ -786,7 +810,7 @@ app.get('/sitemap.xml', async (req, res) => {
                 freq: 'monthly',
                 lastmod: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : undefined,
                 images: p.coverImage ? [{
-                    loc: p.coverImage,
+                    loc: /^https?:\/\//i.test(p.coverImage) ? p.coverImage : `${base}${p.coverImage.charAt(0) === '/' ? '' : '/'}${p.coverImage}`,
                     title: p.title || '',
                     caption: (p.excerpt || p.title || '').slice(0, 300)
                 }] : []
@@ -822,8 +846,25 @@ registerSeoRoutes(app, {
     postsCollection: () => postsCollection
 });
 
-// Uploaded blog images (local fallback when Cloudinary is not configured)
+// Uploaded blog images. Try the local disk first (legacy / last-resort uploads)...
 app.use('/uploads', express.static(UPLOADS_DIR));
+// ...then fall back to MongoDB-stored images so they survive Railway redeploys.
+app.get('/uploads/:name', async (req, res) => {
+    try {
+        if (!isConnected || !imagesCollection) return res.status(404).end();
+        const img = await imagesCollection.findOne({ name: req.params.name });
+        if (!img || !img.data) return res.status(404).end();
+        const raw = img.data.buffer || img.data; // BSON Binary -> Buffer
+        const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+        res.set('Content-Type', img.contentType || 'image/jpeg');
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        res.set('Access-Control-Allow-Origin', '*');
+        res.send(buf);
+    } catch (e) {
+        console.error('Image serve error:', e.message);
+        res.status(404).end();
+    }
+});
 
 // Static assets — after SEO routes so blog pages get server-rendered meta for Google
 app.use(express.static(__dirname));
@@ -859,6 +900,7 @@ async function connectDB() {
         postsCollection = db.collection('posts');
         messagesCollection = db.collection('messages');
         visitsCollection = db.collection('visits');
+        imagesCollection = db.collection('images');
         isConnected = true;
         console.log('✅ Connected to MongoDB successfully!');
 
@@ -867,6 +909,7 @@ async function connectDB() {
             await visitsCollection.createIndex({ sessionId: 1 }, { unique: true });
             await visitsCollection.createIndex({ lastSeen: -1 });
             await visitsCollection.createIndex({ firstSeen: -1 });
+            await imagesCollection.createIndex({ name: 1 }, { unique: true });
         } catch (ixErr) { /* index may already exist */ }
         
         // Test the connection

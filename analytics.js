@@ -15,6 +15,8 @@
   var ref = document.referrer;
   if (!ref || ref.indexOf(location.origin) === 0) ref = 'direct';
 
+  var TRACK_URL = (window.EEL ? EEL.api('/api/track') : '/api/track');
+
   function send(event) {
     try {
       var body = JSON.stringify({
@@ -24,17 +26,17 @@
         event: event,
         referrer: ref
       });
-      // sendBeacon is more reliable on mobile Safari / background tabs
+      // text/plain avoids a CORS preflight so the beacon works cross-origin (Netlify -> Railway).
+      // sendBeacon is more reliable on mobile Safari / background tabs.
       if (navigator.sendBeacon) {
-        navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
+        navigator.sendBeacon(TRACK_URL, new Blob([body], { type: 'text/plain' }));
         return;
       }
-      fetch('/api/track', {
+      fetch(TRACK_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: body,
-        keepalive: true,
-        credentials: 'same-origin'
+        keepalive: true
       }).catch(function () {});
     } catch (e) {}
   }

@@ -12,8 +12,16 @@ function escHtml(s) {
         .replace(/"/g, '&quot;');
 }
 
+// Make a cover URL absolute for crawlers/social cards. Relative /uploads paths are
+// resolved against the current host; Cloudinary/external URLs are returned untouched.
+function absImg(coverImage, base) {
+    if (!coverImage) return '';
+    if (/^https?:\/\//i.test(coverImage)) return coverImage;
+    return `${base}${coverImage.charAt(0) === '/' ? '' : '/'}${coverImage}`;
+}
+
 function postImage(post, base) {
-    return post.coverImage || `${base}/precious-enoch-2.jpg`;
+    return absImg(post.coverImage, base) || `${base}/precious-enoch-2.jpg`;
 }
 
 function blogPostingSchema(post, base, postUrl) {
@@ -76,25 +84,41 @@ function patchPostHead(html, post, base, postUrl) {
         /<meta name="description" content="[^"]*">/,
         `<meta name="description" content="${escHtml(desc)}">`
     );
+    // Replace an existing <meta property|name="key" content="..."> in place, or inject
+    // it before </head> if the page doesn't have it. (The old version used CSS-selector
+    // brackets in the regex and silently matched nothing, so social tags never updated.)
+    function setMetaTag(doc, attr, key, val) {
+        const re = new RegExp('(<meta ' + attr + '="' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '" content=")[^"]*(">)');
+        if (re.test(doc)) return doc.replace(re, '$1' + escHtml(val) + '$2');
+        return doc.replace('</head>', '<meta ' + attr + '="' + key + '" content="' + escHtml(val) + '">\n</head>');
+    }
     const meta = [
-        ['meta[property="og:title"]', post.title],
-        ['meta[property="og:description"]', desc],
-        ['meta[property="og:url"]', postUrl],
-        ['meta[property="og:image"]', img],
-        ['meta[property="og:image:alt"]', post.title],
-        ['meta[name="twitter:title"]', post.title],
-        ['meta[name="twitter:description"]', desc],
-        ['meta[name="twitter:image"]', img],
-        ['meta[name="twitter:image:alt"]', post.title]
+        ['property', 'og:title', post.title],
+        ['property', 'og:description', desc],
+        ['property', 'og:url', postUrl],
+        ['property', 'og:image', img],
+        ['property', 'og:image:secure_url', img],
+        ['property', 'og:image:alt', post.title],
+        ['name', 'twitter:title', post.title],
+        ['name', 'twitter:description', desc],
+        ['name', 'twitter:image', img],
+        ['name', 'twitter:image:alt', post.title]
     ];
-    meta.forEach(([sel, val]) => {
-        html = html.replace(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' content="[^"]*"'),
-            `${sel} content="${escHtml(val)}"`);
-    });
+    meta.forEach(([attr, key, val]) => { html = setMetaTag(html, attr, key, val); });
     html = html.replace(
         /<link rel="canonical" href="[^"]*">/,
         `<link rel="canonical" href="${escHtml(postUrl)}">`
     );
+    // Article-level Open Graph + keywords injected into the server-rendered head
+    const published = post.created_at ? new Date(post.created_at).toISOString() : '';
+    const articleMeta =
+        (published ? `<meta property="article:published_time" content="${escHtml(published)}">\n` : '') +
+        (post.updated_at ? `<meta property="article:modified_time" content="${escHtml(new Date(post.updated_at).toISOString())}">\n` : '') +
+        `<meta property="article:author" content="${escHtml(post.author || 'Precious C. Enoch, Esq.')}">\n` +
+        `<meta property="article:section" content="${escHtml(post.category || 'Legal Insights')}">\n` +
+        `<meta property="article:tag" content="${escHtml(post.category || 'law')}">\n` +
+        `<meta name="keywords" content="${escHtml([post.category, 'Enoch & Enoch Legal', 'legal insight', 'Nigeria law', post.title].filter(Boolean).join(', '))}">\n`;
+    html = html.replace('</head>', `${articleMeta}</head>`);
     const ld = `<script type="application/ld+json">${JSON.stringify(blogPostingSchema(post, base, postUrl))}</script>`;
     html = html.replace('</head>', `${ld}\n</head>`);
     if (!html.includes('max-image-preview')) {
@@ -117,7 +141,7 @@ function itemListSchema(posts, base) {
             url: `${base}/blog-post.html?id=${p.id}`,
             name: p.title,
             description: p.excerpt,
-            image: p.coverImage ? { '@type': 'ImageObject', url: p.coverImage, name: p.title, caption: p.excerpt } : undefined
+            image: p.coverImage ? { '@type': 'ImageObject', url: absImg(p.coverImage, base), name: p.title, caption: p.excerpt } : undefined
         }))
     };
 }
@@ -226,7 +250,7 @@ function registerSeoRoutes(app, ctx) {
                 const link = `${base}/blog-post.html?id=${p.id}`;
                 const pub = p.created_at ? new Date(p.created_at).toUTCString() : new Date().toUTCString();
                 const media = p.coverImage
-                    ? `\n      <media:content url="${esc(p.coverImage)}" medium="image">\n        <media:title>${esc(p.title)}</media:title>\n        <media:description>${esc(p.excerpt)}</media:description>\n      </media:content>`
+                    ? `\n      <media:content url="${esc(absImg(p.coverImage, base))}" medium="image">\n        <media:title>${esc(p.title)}</media:title>\n        <media:description>${esc(p.excerpt)}</media:description>\n      </media:content>`
                     : '';
                 return (
                     `    <item>\n` +

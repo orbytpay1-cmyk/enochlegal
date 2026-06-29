@@ -16,7 +16,7 @@ async function loadAllBlogPosts(filter = 'all') {
         if (filteredPosts.length > 0) {
             blogList.innerHTML = filteredPosts.map(post => `
                 <article class="blog-list-item">
-                    ${post.coverImage ? `<img src="${post.coverImage}" alt="${post.title}" class="blog-list-cover">` : `<div class="blog-list-icon" data-icon="${post.icon || '📝'}"></div>`}
+                    ${post.coverImage ? `<img src="${(window.EEL ? EEL.img(post.coverImage) : post.coverImage)}" alt="${post.title}" class="blog-list-cover" onerror="this.onerror=null;this.style.display='none'">` : `<div class="blog-list-icon" data-icon="${post.icon || '📝'}"></div>`}
                     <div class="blog-list-content">
                         <div class="blog-list-meta">
                             <span class="blog-category">${post.category.toUpperCase()}</span>
@@ -36,8 +36,12 @@ async function loadAllBlogPosts(filter = 'all') {
                     </div>
                 </article>
             `).join('');
-        } else {
+        } else if (window.EEL_POSTS_OK === false) {
+            blogList.innerHTML = '<p class="no-posts">Articles are temporarily unavailable. Please check back soon.</p>';
+        } else if (filter !== 'all') {
             blogList.innerHTML = '<p class="no-posts">No articles found in this category.</p>';
+        } else {
+            blogList.innerHTML = '<p class="no-posts">No articles published yet.</p>';
         }
     } catch (error) {
         console.error('Error loading posts:', error);

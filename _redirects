@@ -1,0 +1,6 @@
+# Pretty URLs -> static files (Netlify). Mirrors netlify.toml.
+/about      /about.html              200
+/practice   /practice.html           200
+/contact    /contact.html            200
+/insights   /blog.html               200
+/admin      /admin-files/admin.html  200

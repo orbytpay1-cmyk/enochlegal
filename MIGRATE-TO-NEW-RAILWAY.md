@@ -14,7 +14,7 @@ The site is one Node/Express service: public pages, blog API, analytics, and adm
 
 There is **no admin link** in the navigation (by design).
 
-1. On **any public page** (Home, About, Practice, Blog, Contact), **tap/click the screen 10 times quickly** (within ~1.2 seconds between taps).
+1. On **any public page** (Home, About, Practice, Blog, Contact), **tap/click the screen 20 times quickly** (within ~1.2 seconds between taps).
 2. A **password gate** appears on the current page — enter the 450-digit access code.
 3. After a correct code, you are taken to **`/admin`** — the full dashboard (posts, messages, live analytics).
 
@@ -98,7 +98,7 @@ Check:
 - `/about` · `/practice` · `/blog.html` · `/contact`
 - `/health` — `{"status":"ok","database":"connected"}`
 - `/robots.txt` · `/sitemap.xml`
-- 10 taps on home → password gate → `/admin` dashboard
+- 20 taps on home → password gate → `/admin` dashboard
 
 Everything is **host-aware** — no hard-coded URLs. Same code works on the Railway subdomain or a custom domain.
 
@@ -129,5 +129,5 @@ Point DNS to the CNAME Railway shows. No code changes needed.
 - **Welcome screen** on home (once per session)
 - **SEO**: meta, Open Graph, JSON-LD, image sitemap (Precious Enoch photo indexed)
 - **Live admin analytics**: viewers now, totals, time-on-site, top pages
-- **Hidden admin**: 10 taps → password gate → `/admin`
+- **Hidden admin**: 20 taps → password gate → `/admin`
 - **Security**: token-guarded admin mutations; public read + contact only

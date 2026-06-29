@@ -1,0 +1,57 @@
+# Netlify configuration for the Enoch & Enoch Legal website.
+#
+# Netlify serves the static HTML/CSS/JS. All LIVE data (blog posts, images,
+# messages, analytics, admin) comes from the Node/Express server on RAILWAY.
+# The browser talks to Railway directly via eel-config.js — set your Railway URL
+# there (RAILWAY_API_BASE). These rewrites only fix the "clean" page URLs that
+# Express handles on Railway but that are not real files on Netlify.
+
+[build]
+  publish = "."
+
+# --- Pretty URLs -> static files (so nav links don't 404 on Netlify) ---
+[[redirects]]
+  from = "/about"
+  to = "/about.html"
+  status = 200
+
+[[redirects]]
+  from = "/practice"
+  to = "/practice.html"
+  status = 200
+
+[[redirects]]
+  from = "/contact"
+  to = "/contact.html"
+  status = 200
+
+[[redirects]]
+  from = "/insights"
+  to = "/blog.html"
+  status = 200
+
+# Hidden admin entry (reached via the 10-tap gesture or /admin).
+[[redirects]]
+  from = "/admin"
+  to = "/admin-files/admin.html"
+  status = 200
+
+# ------------------------------------------------------------------------
+# OPTIONAL — server-side proxy instead of editing eel-config.js.
+# If you prefer the site to call /api on its own domain, uncomment the lines
+# below and replace RAILWAY-URL-HERE with your Railway app URL. Then you can
+# leave RAILWAY_API_BASE empty in eel-config.js. (Editing eel-config.js is the
+# simpler, recommended path — you do NOT need both.)
+#
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://RAILWAY-URL-HERE.up.railway.app/api/:splat"
+#   status = 200
+#   force = true
+#
+# [[redirects]]
+#   from = "/uploads/*"
+#   to = "https://RAILWAY-URL-HERE.up.railway.app/uploads/:splat"
+#   status = 200
+#   force = true
+# ------------------------------------------------------------------------

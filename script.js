@@ -200,16 +200,18 @@ async function loadBlogPreviews() {
         let previewPosts = allBlogPosts.slice(0, 3);
         
         if (previewPosts.length === 0) {
-            blogPreviewGrid.innerHTML = '<p style="text-align: center; color: #666;">No articles available yet.</p>';
+            blogPreviewGrid.innerHTML = (window.EEL_POSTS_OK === false)
+                ? '<p style="text-align: center; color: #666;">Articles are temporarily unavailable. Please check back soon.</p>'
+                : '<p style="text-align: center; color: #666;">No articles available yet.</p>';
             return;
         }
-        
+
         blogPreviewGrid.innerHTML = previewPosts.map(post => `
             <div class="blog-preview-card" onclick="window.location.href='blog-post.html?id=${post.id}'">
-                ${post.coverImage ? 
+                ${post.coverImage ?
                     `<div class="blog-preview-image">
-                        <img src="${post.coverImage}" alt="${post.title}">
-                    </div>` : 
+                        <img src="${(window.EEL ? EEL.img(post.coverImage) : post.coverImage)}" alt="${post.title}" onerror="this.onerror=null;this.parentNode.style.display='none'">
+                    </div>` :
                     `<div class="blog-preview-icon">${post.icon || '📝'}</div>`
                 }
                 <div class="blog-preview-body">
